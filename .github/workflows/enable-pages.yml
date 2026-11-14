@@ -1,0 +1,40 @@
+name: Enable GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enable Pages from the main branch root
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          API="https://api.github.com/repos/${GITHUB_REPOSITORY}/pages"
+          HDR=(-H "Authorization: Bearer ${GH_TOKEN}" -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28")
+          echo "Current Pages config (if any):"
+          curl -sS "${HDR[@]}" "${API}" || true
+          echo
+          CODE=$(curl -sS -o /tmp/pages-out.json -w "%{http_code}" -X POST "${HDR[@]}" "${API}" \
+            -d '{"source":{"branch":"main","path":"/"}}')
+          echo "POST /pages -> ${CODE}"
+          cat /tmp/pages-out.json || true
+          echo
+          if [ "${CODE}" = "409" ] || [ "${CODE}" = "422" ]; then
+            CODE=$(curl -sS -o /tmp/pages-out.json -w "%{http_code}" -X PUT "${HDR[@]}" "${API}" \
+              -d '{"source":{"branch":"main","path":"/"}}')
+            echo "PUT /pages -> ${CODE}"
+            cat /tmp/pages-out.json || true
+            echo
+          fi
+          echo "Final Pages config:"
+          curl -sS -D - "${HDR[@]}" "${API}"

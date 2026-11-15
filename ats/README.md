@@ -1,39 +1,38 @@
-# ATS · Auto Trading System
+# ATS · Auto Trading System (v4)
 
-Open it at: https://moha15558331.github.io/v25-signals/ats/
+A remote control and dashboard for the **ATS bot**, which runs 24/7 on Mohamed's server (`ats.2-29-170-227.sslip.io`). It is **demo by default**. Times are Bahrain (UTC+3).
 
-A standalone home-screen web app (PWA) that runs one **Rise/Fall bot on Volatility 25 (1s)** (`1HZ25V`) on a Deriv **options** account through the new Deriv API (`api.derivws.com`, PAT token, OTP WebSocket). It is separate from V25 Signals and has its own storage keys (`ats.*`).
+## The ATS bot (strategy `hybrid`)
 
-- **Connect:** paste a Deriv API token (Trade and Read scopes). It's stored only in this phone's localStorage and never in this repo. There's a Demo/Real switch, and Demo is the default. Real asks for confirmation and shows a REAL banner.
-- **Dashboard:** "Welcome, <name>" (set with the pencil, because the new API doesn't return the account name), "to the future of auto trading", a DEMO/REAL badge, session P&L, balance, trades, win rate, open contracts, bot status, **Stop all bots**, and ATS-wide session limits.
-- **Rise/Fall bot** (CALL/PUT):
-  - Direction: our analysis (`predict()` from V25 Signals; waits when it's neutral), always Rise, always Fall, or alternate.
-  - Cycle: 1m, 5m, 15m, 30m, 1h, 4h, 1d, custom (minutes/hours, up to 1 day), or 1–10 ticks. The cycle sets the contract duration (minutes or hours; 1d is sent as 24h) and the analysis timeframe: the main candles match the cycle, with ≈4× and ≈24× higher timeframes.
-  - **Align to candle boundary** (on by default): each contract opens at a cycle boundary and expires at the next one (`date_expiry`), so consecutive candles can be traded back to back.
-  - Martingale (on by default) ×2.1, max 3 steps, reset after a win, with a stake-ladder preview. Stakes are rounded to cents, and the minimum is $0.35.
-  - Required limits: session stop-loss, take-profit, maximum losses in a row, maximum stake cap. The bot halts **before** any trade that could break one.
-- **Safety:** one contract at a time. If a buy reply is lost, the bot checks `portfolio`/`profit_table` and adopts the contract instead of buying again. Settlement polling survives socket drops. Switching accounts stops the bot.
-- **History:** every trade is kept in localStorage, with win rate and P&L overall, by side and for this session, plus CSV export.
+- **Differs:** DIGITDIFF on Volatility 25 (1s) `1HZ25V`, 1 tick, $0.35. It predicts the **least-occurring last digit of the last 100 ticks**. On a tie it takes the colder digit, the one whose last appearance came earliest. This is an exact port of the old HTML analyzer and the hybrid backtest (`shared/hybrid.js`, checked on 20,000 real ticks).
+- **Recovery:** a Differs loss switches to **15-second Rise/Fall** with martingale ×2.1 over 3 steps ($0.74 → $1.54 → $3.24).
+  - **Smart martingale** cuts any stake down to the room left before a stop-loss.
+  - A recovery win goes back to Differs at the base stake. If all 3 steps lose, the bot also goes back to base.
+- **Recovery direction:** `core.js predict()` on the shortest candles Deriv serves (1m main, 5m and 30m higher), with the forming candles closed at the latest tick.
+  - Inside the dead zone it follows the sign of the score.
+  - At a score of exactly 0 it follows the last 15 ticks.
+- **Daily limits:** a +$1 lock and a −$2 stop. They reset at 00:00 Bahrain, and the bot waits and then carries on by itself.
+- **Halt the bot (press Start again):** session SL $6 / TP $3, 4 losses in a row, the $3.50 stake cap, and the ATS session limits −$10 / +$6.
+- **Pacing:** a 2.5 s gap after each Differs win.
 
-## Server mode (v3, default once a key is saved)
+## Real money (off by default)
 
-The bot can run 24/7 on Mohamed's server (`ats-server`, `/opt/ats`, systemd `ats.service`), **demo account only**. The app becomes the remote control: dashboard, start/stop, Stop all, settings, history and win rate all come from the server's HTTPS API (`https://ats.2-29-170-227.sslip.io`, Let's Encrypt via Caddy).
+1. Put the real token on the server as `/opt/ats/.secrets/deriv-real.env`, with the line `DERIV_REAL_TOKEN=...` (owner `ats`, mode 600). No restart is needed.
+2. In the app, open Account (top right) → **Real**, type **REAL**, and confirm. The phone also sends its server key.
+3. **Hard caps:** daily stop of $2 at most, no stake above the stake cap, and a lifetime real-loss cap (default $10, set under Settings → Account). When the cap is hit, real mode turns itself off and the bot stops.
+4. Only the ATS bot runs on real. Switching account requires the bot to be stopped, and it starts a fresh session.
 
-- Account (top right) → **Server · 24/7** → enter the one-time pairing code (or the server key) once. It is kept only in this phone's localStorage (never in this repo). Wrong keys are locked out on the server.
-- The server checks the account is demo before every bot session (REST account type, demo OTP endpoint, login id) and refuses otherwise. It never trades real money.
-- State, settings, history and session P&L are saved on the server and survive restarts; an open contract is settled and martingale continues at the right step.
-- Balance is the whole demo account; ATS P&L and win rate count only ATS contracts.
-- **This phone** (the same switch) is the old local mode, kept as a fallback. In local mode the bot runs in the browser, so iPhone pauses it when the app is backgrounded or the screen locks.
+**Reset demo balance:** Account → Reset demo balance. It works on the demo token only.
 
-Tests: `node tests/ats-engine.test.js`.
+## App
 
-## Model test (v3.1, server only, demo only)
+- **Home:** today against the −$2/+$1 bar, the phase (Differs / Recovery step n) with the predicted digit and the stake ladder, Start/Stop, and recent trades.
+- **Stats:** Differs win rate, recovery step win rates, chains saved/lost, P/L by phase, hour, day and digit.
+- **History:** trades with CSV export.
+- **Settings:** every bot setting, account, appearance (Automatic / Light / Dark), and server.
+- **Alerts:** in-app toasts from the server's event feed.
+- `legacy/` is the old v3 app with the phone mode (the bot running inside the phone).
 
-Bot → **Strategy** → "Model test · 10m neural net (demo)". The server runs the 10-minute neural net from the edge search (`/opt/ats/shared/model10m.js` + `model10m.json`, a JS port checked against the Python model):
+API: `/api/status`, `/api/stats`, `/api/events`, `/api/real`, `/api/demo/reset`, `/api/settings`, `/api/bot/start|stop`, `/api/history`.
 
-- Every 10 minutes (hh:01, hh:11, … Bahrain) it scores V25 and buys a 10-minute Rise/Fall **only** when the call is in its top 10% (P(Rise) above 61.75% or below 38.25%).
-- Flat $1 stake, no martingale. Daily +$1 profit lock and −$2 stop (Bahrain day). The ATS session limits, max losses in a row and max stake cap still apply.
-- Every call is logged (traded or not), and each signal is scored on the candle close 10 minutes later, so accuracy is measured on more than the few trades the daily lock allows.
-- The dashboard shows a **Model test** card: trades, win rate, P&L, the 95% range against the 51.3% break-even, all-signal accuracy, today, this week, and the last call. API: `GET /api/model`.
-
-Research result: 54.4% on 579 out-of-sample trades, not statistically proven. This is a live forward test, not a money maker.
+None of this has a tested edge: the backtests lost money over time.

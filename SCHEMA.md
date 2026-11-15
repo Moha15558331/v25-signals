@@ -38,5 +38,9 @@ One JSON object per signal. `logger/data/signals.json` is an array of these; `si
 | excluded_from_stats | bool | true for bootstrap, missed, and late entries |
 | reason | string | why a signal was missed or marked late |
 | issued_actual_utc | string | wall-clock write time (may be later than issued_utc for historical late rows) |
+| demo_trade {status, test, contract_type, stake, contract_id, buy_price, payout, profit, result, entry_spot, exit_spot, placed_utc, settled_utc, account_type, account_prefix, reason} | object \| absent | Deriv **demo** Rise/Fall contract placed by the box logger for an on-time hourly buy/sell (CALL for buy, PUT for sell, 1h, stake from `logger/demo-config.json`). status = `open` \| `settled` \| `skipped` (guard: kill switch, max open, daily loss cap, disabled) \| `error`. profit is Deriv's settled profit from `proposal_open_contract`. Never present on neutral, missed, late, manual or bootstrap rows. Additive field: does not change stats. |
 
 Edge-candidate rule: hit rate ≥ 55 %, n ≥ 50, one-sided exact binomial p < 0.05 vs 50 %. Stats exclude bootstrap, missed, late, `excluded_from_stats`, neutral and ties.
+
+### Demo status file (`data/demo.json`)
+Sanitized, published for the phone: `configured, app_id_configured, connected, verified_demo, account_type, account_prefix` (first 4 chars only), `currency, balance, enabled, kill_switch, stake, daily_loss_cap, max_open, today_pnl, open_trades[], recent[], totals {settled, wins, net}, last_error, last_reset`. Never contains the token, OTP or full login id.

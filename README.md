@@ -51,3 +51,13 @@ Rise/Fall payouts on Deriv are **below 100%** of stake (check your trade ticket;
 
 ## Symbols
 1HZ25V (default), R_25, 1HZ10V, 1HZ75V, R_75, JD10. Deriv currently lists no `1HZ5V` (Volatility 5) symbol.
+
+## v2.0 (Nov 2026): redesign + demo auto-trading
+
+- New minimal UI: Chart, Signal and Stats tabs; power-user detail (votes, indicators, paper settings, raw log, import/export) lives in the Details sheet (top-right button).
+- **Demo auto-trading** runs only in the box logger (`logger/demo-trader.js`), never in the browser. It trades a Deriv **demo** account on each on-time hourly buy/sell (CALL/PUT, 1h, `logger/demo-config.json` stake, default $1).
+  - Auth: Deriv new Options API. PAT token + App ID read from a chmod-600 secrets file on the box, outside the repo (`DERIV_DEMO_TOKEN`, `DERIV_APP_ID`), never committed. `GET /accounts` → demo account → `POST /accounts/{id}/otp` → `wss://api.derivws.com/trading/v1/options/ws/demo?otp=…`. Refuses unless the account is `demo` and the socket is the `/ws/demo` endpoint.
+  - Guards: max 1 open trade, daily loss cap (default $5, Bahrain day), kill switch (`touch logger/data/KILL`), `enabled:false` in config.
+  - Results go into each signal's `demo_trade` field; a sanitized status is written to `data/demo.json` for the phone.
+  - Reset demo balance (Deriv default $10,000): `touch logger/data/RESET_DEMO_BALANCE` or `node logger/demo-trader.js --reset-balance`. The phone button resets the local paper balance and explains that the Deriv reset runs from the box (the phone never holds the token).
+  - CLI: `node logger/demo-trader.js --check | --test-trade 0.35 buy | --settle | --reset-balance`.

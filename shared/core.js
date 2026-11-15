@@ -213,7 +213,8 @@
     'indicators.ema20', 'indicators.ema50', 'indicators.ema200', 'indicators.rsi14', 'indicators.macd_hist', 'indicators.bb_pctb', 'indicators.bb_width', 'indicators.bb_squeeze', 'indicators.atr14_1h',
     'votes.structure', 'votes.sr', 'votes.ema', 'votes.rsi', 'votes.macd', 'votes.bb', 'votes.hour', 'edge_status', 'status',
     'outcome_price', 'outcome_epoch', 'outcome_utc', 'outcome_bahrain', 'move_abs', 'move_pct', 'in_target_zone', 'result',
-    'late', 'excluded_from_stats', 'reason', 'issued_actual_utc', 'note', 'reasons', 'json'];
+    'late', 'excluded_from_stats', 'reason', 'issued_actual_utc', 'note',
+    'demo_trade.status', 'demo_trade.contract_type', 'demo_trade.contract_id', 'demo_trade.buy_price', 'demo_trade.payout', 'demo_trade.profit', 'demo_trade.result', 'reasons', 'json'];
   const get = (o, p) => p.split('.').reduce((a, k) => a == null ? a : a[k], o);
   const esc = v => { if (v == null) return ''; const s = typeof v === 'object' ? JSON.stringify(v) : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; };
   function toCSV(log) { return [CSV_COLS.join(',')].concat(log.map(x => CSV_COLS.map(c => c === 'json' ? esc(JSON.stringify(x)) : c === 'reasons' ? esc((x.reasons || []).join(' | ')) : esc(get(x, c))).join(','))).join('\n'); }
@@ -236,6 +237,8 @@
       if (o.excluded_from_stats || x.excluded_from_stats) base.excluded_from_stats = true;
       if (!base.reason) base.reason = x.reason || o.reason;
       if (!base.note) base.note = x.note || o.note;
+      const rank = d => !d ? 0 : ({ settled: 4, open: 3, error: 2, skipped: 1 }[d.status] || 1);
+      if (o.demo_trade || x.demo_trade) base.demo_trade = rank(x.demo_trade) >= rank(o.demo_trade) ? x.demo_trade : o.demo_trade;
       m.set(x.id, base);
     };
     a.forEach(put); b.forEach(put);

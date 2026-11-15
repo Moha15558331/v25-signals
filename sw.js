@@ -3,13 +3,15 @@
  * Never caches live market data (WebSocket ticks do not go through fetch)
  * and never caches the published signal log (always network, no-store).
  */
-const CACHE = 'v25-shell-v2';
+const CACHE = 'v25-shell-v3';
 const SHELL = [
   './',
   './index.html',
   './style.css',
   './app.js',
+  './config/deriv.js',
   './shared/core.js',
+  './shared/deriv-account.js',
   './vendor/lightweight-charts.js',
   './manifest.json',
   './icons/icon-192.png',

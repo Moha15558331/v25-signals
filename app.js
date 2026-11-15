@@ -1,5 +1,6 @@
-/* V25 Signals: browser app. Public market data only. Never holds a token, never trades.
- * Demo-account trading runs server-side in the box logger; this app only reads its sanitized data/demo.json. */
+/* V25 Signals: browser app. Public market data plus an optional Deriv token the user pastes.
+ * The token is stored only in this phone's localStorage — never in the repo.
+ * Hourly auto-trading stays on the box logger (demo only). Phone trades are manual. */
 (() => {
 'use strict';
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(err => console.warn('SW register failed', err)));
@@ -7,7 +8,7 @@ const C = window.V25Core, LC = window.LightweightCharts;
 const $ = id => document.getElementById(id);
 const LS = { log: 'v25.log', cfg: 'v25.cfg' };
 const PAPER_DEFAULT = { balance: 50, stake: 1, payout: 95 };
-const cfg = Object.assign({ symbol: '1HZ25V', tf: '15m', showBoot: false }, PAPER_DEFAULT, JSON.parse(localStorage.getItem(LS.cfg) || '{}'));
+const cfg = Object.assign({ symbol: '1HZ25V', tf: '15m', showBoot: false, tradeStake: 1 }, PAPER_DEFAULT, JSON.parse(localStorage.getItem(LS.cfg) || '{}'));
 const saveCfg = () => localStorage.setItem(LS.cfg, JSON.stringify(cfg));
 let LOG = JSON.parse(localStorage.getItem(LS.log) || '[]');
 const saveLog = () => localStorage.setItem(LS.log, JSON.stringify(LOG));
@@ -90,7 +91,7 @@ async function start() { await client.connect();
     $('px').textContent = fmt(t.quote, t.pip_size);
     if (S.prevDay) { const ch = (t.quote - S.prevDay) / S.prevDay * 100; $('chg').textContent = (ch >= 0 ? '+' : '') + ch.toFixed(2) + '% · 24h'; $('chg').className = 'chip ' + (ch >= 0 ? 'up' : 'dn'); }
     onTickChart(+t.quote, +t.epoch); });
-  loadTF(cfg.tf); await refreshPrediction(); setInterval(refreshPrediction, 60000); setInterval(gradeOpen, 30000); gradeOpen(); syncBox(true); loadDemo(); setInterval(loadDemo, 60000); }
+  loadTF(cfg.tf); await refreshPrediction(); setInterval(refreshPrediction, 60000); setInterval(gradeOpen, 30000); gradeOpen(); syncBox(true); loadDemo(); setInterval(loadDemo, 60000); bootWallet(); }
 
 // ---------- prediction ----------
 async function refreshPrediction() { try { S.snapshot = await client.snapshot(cfg.symbol); const m1 = S.snapshot['1m']; S.prevDay = m1[Math.max(0, m1.length - 1440)].open;
@@ -117,25 +118,165 @@ async function gradeOpen() { const now = Date.now() / 1000; let ch = false;
   for (const s of LOG.filter(x => x.status === 'open' && x.due_epoch <= now - 3)) { try { const p = await client.priceAt(s.symbol, s.due_epoch); C.grade(s, p.price, p.epoch); ch = true; } catch (e) { } }
   if (ch) { saveLog(); renderStats(); } }
 
-// ---------- demo account (read-only view of the box logger's sanitized status) ----------
-async function loadDemo() { try { const r = await fetch('data/demo.json', { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); S.demo = await r.json(); } catch (e) { S.demo = S.demo || null; } renderDemo(); }
+// ---------- phone Deriv account (token in localStorage only) ----------
+const DA = window.V25DerivAccount;
+const WALLET_SVG = '<svg class="wallet-svg" viewBox="0 0 24 24"><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5z"/><path d="M16 12h.01"/></svg>';
+function setWalletStatus(msg, type) {
+  const el = $('wStatus'); if (!el) return;
+  el.textContent = msg || '';
+  el.className = 'wallet-status' + (type ? ' ' + type : '');
+}
+function openWallet() {
+  const drop = $('walletDrop');
+  drop.hidden = false;
+  drop.classList.add('open');
+  renderWallet();
+  if (!DA.snapshot().hasToken) setTimeout(() => { const inp = $('wTokenInput'); if (inp) inp.focus(); }, 50);
+  if (DA.snapshot().hasToken) DA.loadAccounts().then(renderWallet);
+}
+function closeWallet() {
+  const drop = $('walletDrop');
+  drop.classList.remove('open');
+  drop.hidden = true;
+}
+function renderWallet() {
+  if (!DA) return;
+  const s = DA.snapshot();
+  const pill = $('walletPill');
+  const drop = $('walletDrop');
+  const tok = $('wTokenSection');
+  const acc = $('wAccountSection');
+  $('realBanner').hidden = !(s.connected && s.mode === 'real');
+  const isOpen = drop.classList.contains('open');
+  drop.className = 'wallet-drop' + (isOpen ? ' open' : '') + (s.connected ? ' ' + s.mode : '');
+  drop.hidden = !isOpen;
+  if (!s.connected) {
+    pill.className = 'wallet-pill connect';
+    pill.innerHTML = '<span>Connect</span>';
+    tok.hidden = false; acc.hidden = true;
+    if (s.status === 'connecting') setWalletStatus('Connecting…');
+    else if (s.status === 'error' && s.lastError) setWalletStatus(s.lastError, 'err');
+    else if (!s.hasToken) setWalletStatus('');
+    updateTradeBar();
+    return;
+  }
+  const bal = s.balance == null ? '—' : Number(s.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const cur = s.currency || 'USD';
+  pill.className = 'wallet-pill ' + s.mode;
+  pill.innerHTML = `<span class="wallet-icon-box">${WALLET_SVG}</span><span class="wallet-text"><span class="wallet-bal">${bal}</span><span class="wallet-mode">${s.mode} · ${cur}</span></span>`;
+  tok.hidden = true; acc.hidden = false;
+  $('wBalance').innerHTML = s.balance == null ? '—' : bal + '<span style="font-size:1.6rem;font-weight:800"> ' + cur + '</span>';
+  $('wCurrency').textContent = '';
+  $('wAccountId').textContent = s.account_prefix ? ('ID: ' + s.account_prefix) : (s.mode === 'real' && !s.hasReal ? 'No real account on this token' : '—');
+  $('wBtnDemo').classList.toggle('active', s.mode === 'demo');
+  $('wBtnReal').classList.toggle('active', s.mode === 'real');
+  const showReset = s.mode === 'demo' && s.hasDemo;
+  $('wResetBtn').style.display = showReset ? '' : 'none';
+  $('wResetBtn').disabled = !showReset || $('wResetBtn').dataset.busy === '1';
+  if (s.status === 'connecting') setWalletStatus('Loading…');
+  else if (s.lastError) setWalletStatus(s.lastError, 'err');
+  else if (s.mode === 'real' && !s.hasReal) setWalletStatus('No real account on this token', 'err');
+  else setWalletStatus('Connected', 'ok');
+  updateTradeBar();
+}
+async function bootWallet() {
+  if (!DA) return;
+  renderWallet();
+  await DA.boot();
+  renderWallet();
+  setInterval(() => { if (DA.snapshot().hasToken) DA.loadAccounts().then(renderWallet); }, 20000);
+}
+$('walletPill').onclick = e => { e.stopPropagation(); openWallet(); };
+$('wCloseBtn').onclick = e => { e.stopPropagation(); closeWallet(); };
+$('walletDrop').onclick = e => { if (e.target === $('walletDrop')) closeWallet(); };
+$('walletDrop').querySelector('.wallet-panel').onclick = e => e.stopPropagation();
+$('wTokenConnectBtn').onclick = async e => {
+  e.stopPropagation();
+  const raw = ($('wTokenInput').value || '').trim();
+  if (!raw) { setWalletStatus('Paste a token first', 'err'); return; }
+  setWalletStatus('Connecting…');
+  const s = await DA.connectWithToken(raw);
+  $('wTokenInput').value = '';
+  renderWallet();
+  if (s.connected) { setWalletStatus('Connected', 'ok'); toast(s.mode === 'demo' ? 'Demo account connected' : 'Account connected'); }
+  else setWalletStatus(s.lastError || 'Connect failed', 'err');
+};
+$('wTokenInput').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('wTokenConnectBtn').click(); } });
+$('wTokenInput').addEventListener('click', e => e.stopPropagation());
+$('wBtnDemo').onclick = () => { DA.setMode('demo'); renderWallet(); };
+$('wBtnReal').onclick = () => { DA.setMode('real'); renderWallet(); };
+$('wLogoutBtn').onclick = () => { DA.disconnect(); renderWallet(); closeWallet(); toast('Disconnected. Token removed from this phone.'); };
+$('wResetBtn').onclick = async e => {
+  e.preventDefault(); e.stopPropagation();
+  const btn = $('wResetBtn');
+  if (btn.dataset.busy === '1') return;
+  if (!confirm('Reset the Deriv demo balance back to the default ($10,000)? This does not place a trade.')) return;
+  btn.dataset.busy = '1'; btn.disabled = true;
+  setWalletStatus('Resetting…');
+  try {
+    await DA.resetDemoBalance();
+    renderWallet();
+    setWalletStatus('Demo balance reset to default', 'ok');
+    toast('Demo balance reset to Deriv default');
+  } catch (err) {
+    setWalletStatus('Reset failed: ' + (err.message || err), 'err');
+  } finally {
+    btn.dataset.busy = '0';
+    renderWallet();
+  }
+};
+
+function updateTradeBar() {
+  const s = DA ? DA.snapshot() : { connected: false };
+  const can = s.connected && !!(s.mode === 'demo' ? s.hasDemo : s.hasReal);
+  $('tradeCall').disabled = !can;
+  $('tradePut').disabled = !can;
+  const pill = $('tradeModePill');
+  if (!s.connected) { pill.textContent = 'Connect first'; pill.className = 'pill'; }
+  else if (s.mode === 'real') { pill.textContent = can ? 'REAL · confirm each trade' : 'No real account'; pill.className = 'pill warn'; }
+  else { pill.textContent = can ? 'Demo · manual only' : 'No demo account'; pill.className = 'pill ' + (can ? 'ok' : 'warn'); }
+  if ($('tradeStake') && !cfg.tradeStakeInit) { $('tradeStake').value = cfg.tradeStake || 1; cfg.tradeStakeInit = true; }
+}
+$('tradeStake').onchange = () => { cfg.tradeStake = +$('tradeStake').value || 1; saveCfg(); };
+async function manualTrade(side) {
+  const s = DA.snapshot();
+  const stake = +$('tradeStake').value || 1;
+  const label = side === 'buy' ? 'Rise' : 'Fall';
+  $('tradeErr').hidden = true;
+  if (!s.connected) { $('tradeErr').hidden = false; $('tradeErr').textContent = 'Connect an account first.'; return; }
+  if (s.mode === 'real') {
+    if (!s.hasReal) { $('tradeErr').hidden = false; $('tradeErr').textContent = 'No real account on this token.'; return; }
+    if (!confirm('This will place a REAL-MONEY 1-hour ' + label + ' trade for $' + stake + '.\n\nThe model has no proven edge. The hourly bot on the computer stays on demo and will not be used here.\n\nPlace this real trade?')) return;
+  } else if (!confirm('Place a DEMO 1-hour ' + label + ' trade for $' + stake + '? This is a manual phone trade, not the hourly auto-trader.')) return;
+  const boxOpen = S.demo && (S.demo.open_trades || []).length;
+  if (boxOpen && !confirm('The box hourly auto-trader already has an open demo trade. Placing another from the phone could mean two contracts at once. Continue?')) return;
+  $('tradeCall').disabled = true; $('tradePut').disabled = true;
+  try {
+    const t = await DA.placeManualTrade({ direction: side, stake, confirmedReal: s.mode === 'real', symbol: cfg.symbol });
+    renderWallet();
+    toast((s.mode === 'real' ? 'REAL ' : 'Demo ') + label + ' placed · #' + t.contract_id + ' · payout $' + fmt(t.payout));
+  } catch (err) {
+    $('tradeErr').hidden = false; $('tradeErr').textContent = err.message || String(err);
+  } finally { updateTradeBar(); }
+}
+$('tradeCall').onclick = () => manualTrade('buy');
+$('tradePut').onclick = () => manualTrade('sell');
+
+// ---------- box logger sanitized snapshot (not the phone session) ----------
+async function loadDemo() { try { const r = await fetch('data/demo.json', { cache: 'no-store' }); if (!r.ok) throw new Error(r.status); S.demo = await r.json(); } catch (e) { S.demo = S.demo || null; } renderDemo(); updateTradeBar(); }
 function renderDemo() { const d = S.demo; const pill = $('demoPill');
-  if (!d) { pill.textContent = 'Not connected'; pill.className = 'pill'; $('demoGuards').textContent = 'Demo status not published yet.'; return; }
+  if (!d) { pill.textContent = 'Not published'; pill.className = 'pill'; $('demoGuards').textContent = 'Hourly auto-trader status not published yet.'; return; }
   const ok = d.connected && d.verified_demo;
-  pill.textContent = ok ? `Connected · Demo ${d.account_prefix || ''}` : d.configured ? 'Setup pending' : 'Not connected'; pill.className = 'pill ' + (ok ? 'ok' : d.configured ? 'warn' : '');
+  pill.textContent = ok ? `Box · Demo ${d.account_prefix || ''}` : d.configured ? 'Box · setup pending' : 'Box · not connected'; pill.className = 'pill ' + (ok ? 'ok' : d.configured ? 'warn' : '');
   $('demoBal').textContent = d.balance == null ? '—' : money(d.balance) + (d.currency && d.currency !== 'USD' ? ' ' + d.currency : '');
   $('demoToday').textContent = money(d.today_pnl, true); $('demoToday').className = d.today_pnl > 0 ? 'up' : d.today_pnl < 0 ? 'dn' : '';
   $('demoOpen').textContent = (d.open_trades || []).length; $('demoSettled').textContent = d.totals ? `${d.totals.wins}/${d.totals.settled}` : '—';
   const rec = (d.recent || []).filter(t => t.status !== 'skipped').slice(0, 4);
   $('demoTrades').innerHTML = rec.length ? rec.map(t => `<li><div>${t.contract_type === 'CALL' ? 'Rise' : 'Fall'} · $${fmt(t.stake)}${t.test ? ' <small style="display:inline">test</small>' : ''}<small>${bh(t.placed_utc)} Bahrain · #${t.contract_id || '—'}</small></div>
     <b class="${t.result === 'win' ? 'up' : t.result === 'loss' ? 'dn' : 'muted'}">${t.status === 'settled' ? money(t.profit, true) : t.status === 'open' ? 'Open' : t.status}</b></li>`).join('') : '';
-  $('demoGuards').textContent = `Auto-trades each on-time hourly Up/Down call · $${fmt(d.stake)} stake · max ${d.max_open} open · daily loss cap $${fmt(d.daily_loss_cap)}${d.kill_switch ? ' · KILL SWITCH ON' : ''}${d.enabled ? '' : ' · paused'} · updated ${bh(d.updated_utc).slice(6)} Bahrain`;
-  const err = d.last_reset && d.last_reset.ok === false ? 'Last reset refused by Deriv: ' + d.last_reset.message : (!ok && d.configured ? (/App-ID|App ID/i.test(d.last_error || '') ? 'Token received. Waiting for a Deriv App ID to finish connecting; no trades until then.' : (d.last_error || '').replace(/^\w+: /, '')) : '');
+  $('demoGuards').textContent = `Computer auto-trades each on-time hourly Up/Down call on demo only · $${fmt(d.stake)} stake · max ${d.max_open} open · daily loss cap $${fmt(d.daily_loss_cap)}${d.kill_switch ? ' · KILL SWITCH ON' : ''}${d.enabled ? '' : ' · paused'} · updated ${bh(d.updated_utc).slice(6)} Bahrain`;
+  const err = d.last_reset && d.last_reset.ok === false ? 'Last box reset refused by Deriv: ' + d.last_reset.message : (!ok && d.configured ? (d.last_error || '').replace(/^\w+: /, '') : '');
   $('demoErr').hidden = !err; $('demoErr').textContent = err; }
-$('resetDemo').onclick = () => {
-  if (!confirm('Reset balances?\n\n• This app\'s paper balance goes back to $' + PAPER_DEFAULT.balance + ' right away.\n• The Deriv demo balance ($10,000 default) is reset from the box, because this phone app never holds your Deriv token. Ask in chat: "reset my demo balance".')) return;
-  Object.assign(cfg, PAPER_DEFAULT); saveCfg(); renderStats();
-  toast('Paper balance reset to $' + PAPER_DEFAULT.balance + '. For the Deriv demo balance, ask in chat: "reset my demo balance".', 6000); };
 
 // ---------- stats ----------
 const allLog = () => LOG.filter(x => x.symbol === cfg.symbol);

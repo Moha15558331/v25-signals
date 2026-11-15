@@ -10,7 +10,7 @@ const R = {
   st: null, hist: null, err: null, lastOk: 0, busy: false, draft: null, histAt: 0,
   url() { return (get(LS.url) || DEF_URL).replace(/\/+$/, ''); },
   hasKey() { return !!get(LS.key); },
-  mode() { const m = get(LS.mode); return m === 'local' ? 'local' : m === 'server' ? 'server' : (this.hasKey() ? 'server' : 'local'); },
+  mode() { return get(LS.mode) === 'local' ? 'local' : 'server'; }, // server is the default; 'This phone' is the fallback
   on() { return this.mode() === 'server' && this.hasKey(); },
   setMode(m) { set(LS.mode, m === 'local' ? 'local' : 'server'); this.st = null; this.hist = null; this.draft = null; this.err = null; this.kick(); },
   setKey(k) { set(LS.key, (k || '').trim()); if (k) set(LS.mode, 'server'); this.st = null; this.hist = null; this.draft = null; this.err = null; },

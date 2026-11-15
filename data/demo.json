@@ -1,0 +1,29 @@
+{
+ "updated_utc": "2026-11-15T05:37:41.992Z",
+ "mode": "demo-only",
+ "symbol": "1HZ25V",
+ "configured": true,
+ "app_id_configured": false,
+ "connected": false,
+ "verified_demo": false,
+ "account_type": null,
+ "account_prefix": null,
+ "currency": null,
+ "balance": null,
+ "enabled": true,
+ "kill_switch": false,
+ "stake": 1,
+ "daily_loss_cap": 5,
+ "max_open": 1,
+ "today_pnl": 0,
+ "open_trades": [],
+ "recent": [],
+ "totals": {
+  "settled": 0,
+  "wins": 0,
+  "net": 0
+ },
+ "last_error": "check: Deriv-App-ID missing: PAT tokens need DERIV_APP_ID (a new App ID registered on developers.deriv.com) in the secrets file",
+ "last_check_utc": null,
+ "last_reset": null
+}

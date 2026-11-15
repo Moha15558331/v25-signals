@@ -6,3 +6,11 @@ logger/data/status.json
 .DS_Store
 *.swp
 node_modules/
+# secrets: never commit
+.secrets/
+*.env
+.env*
+logger/data/KILL
+logger/KILL
+logger/data/RESET_DEMO_BALANCE
+logger/data/*.tmp

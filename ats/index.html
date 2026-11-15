@@ -9,13 +9,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ATS">
 <meta name="application-name" content="ATS">
-<meta name="app-version" content="4.0.3">
-<meta name="description" content="ATS bot: Differs on the least digit with Rise/Fall recovery on Volatility 25 (1s). Runs 24/7 on your server. Demo by default.">
+<meta name="app-version" content="4.1.0">
+<meta name="description" content="Two bots on Volatility 25 (1s): the ATS bot (Differs with Over/Under recovery) and Rise/Fall 1H. Runs 24/7 on your server. Demo by default.">
 <title>ATS · Auto Trading System</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=43">
+<link rel="stylesheet" href="style.css?v=44">
 <script>try{var t=localStorage.getItem('ats.theme2')||'auto';var d=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){document.documentElement.dataset.theme='dark';}</script>
 </head><body>
 <header class="top" id="top">
@@ -40,6 +40,7 @@
     </div>
 
     <div id="homeMain">
+      <div class="bots" id="bots"></div>
       <div class="card hero" id="heroCard">
         <div class="hero-top">
           <div><span class="eyebrow">Today</span><div class="big-pnl" id="dayPnl">$0.00</div><div class="sub" id="daySub">Resets at 00:00</div></div>
@@ -58,7 +59,6 @@
       </div>
 
       <div class="control">
-        <button type="button" class="btn go block" id="goBtn"><span class="go-ico" id="goIco"></span><span id="goTxt">Start ATS bot</span></button>
         <div class="status-line" id="statusLine"><i class="dot"></i><span id="statusTxt">Connecting…</span></div>
       </div>
 
@@ -68,6 +68,7 @@
           <div class="digit-ring" id="digitRing"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" class="ring-bg"/><circle cx="32" cy="32" r="28" class="ring-fg" id="ringFg"/></svg><span id="digitBig">–</span><small>DIFFERS</small></div>
         </div>
         <div class="ladder" id="ladder"></div>
+        <div class="cap-note" id="capNote"></div>
         <div class="freq" id="freq"></div>
         <div class="rec-line" id="recLine"></div>
       </div>
@@ -83,13 +84,14 @@
   <!-- STATS -->
   <section class="view" id="v-stats" hidden>
     <h1 class="page-title">Stats</h1>
+    <div class="seg" id="statSeg"><button type="button" data-b="ats" class="on">ATS bot</button><button type="button" data-b="rf1h">Rise/Fall 1H</button></div>
     <div id="statsBody"><div class="card"><p class="muted">Loading…</p></div></div>
   </section>
 
   <!-- HISTORY -->
   <section class="view" id="v-history" hidden>
     <h1 class="page-title">History</h1>
-    <div class="seg" id="histSeg"><button type="button" data-f="all" class="on">All</button><button type="button" data-f="differs">Differs</button><button type="button" data-f="recovery">Recovery</button><button type="button" data-f="real">Real</button></div>
+    <div class="seg" id="histSeg"><button type="button" data-f="all" class="on">All</button><button type="button" data-f="ats">ATS bot</button><button type="button" data-f="rf1h">Rise/Fall 1H</button><button type="button" data-f="real">Real</button></div>
     <div class="card"><ul class="trades" id="histList"></ul></div>
     <button type="button" class="btn ghost block" id="exportBtn">Export CSV</button>
   </section>
@@ -112,8 +114,9 @@
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="sheet-wrap" id="sheetWrap" hidden><div class="sheet-bg" id="sheetBg"></div><div class="sheet" id="sheet" role="dialog"></div></div>
 
-<script src="shared/ats-engine.js?v=43"></script>
-<script src="shared/hybrid.js?v=43"></script>
-<script src="remote.js?v=43"></script>
-<script src="app.js?v=43"></script>
+<script src="shared/ats-engine.js?v=44"></script>
+<script src="shared/hybrid.js?v=44"></script>
+<script src="shared/rf1h.js?v=44"></script>
+<script src="remote.js?v=44"></script>
+<script src="app.js?v=44"></script>
 </body></html>

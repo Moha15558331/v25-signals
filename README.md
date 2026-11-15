@@ -1,6 +1,6 @@
-# V25 Signals (v1)
+# V25 Signals
 
-Paper-trading signal lab for Deriv **Volatility 25 (1s) Index (`1HZ25V`)**. It uses public market data only, **needs no API token and never places trades**. You place any real trade yourself on Deriv.
+Signal lab for Deriv **Volatility 25 (1s) Index (`1HZ25V`)**. Live ticks use public market data (no token). To show your Deriv balance or place a manual practice trade, paste a token into the in-app Account panel — it is stored only in that phone's `localStorage` and is **never committed to this repository**.
 
 > V25 is a synthetic random index. Its price is generated to be unpredictable, so the 1h direction calls are **untested** until the Stats screen shows a verified edge on enough graded signals.
 
@@ -18,14 +18,14 @@ The page is a Progressive Web App: live ticks still come straight from Deriv's p
 
 ## Screens (bottom tab bar)
 - **Chart:** live candles for 1D, 4H, 1H, 15M, 5M or 1M, plus the 6 nearest support/resistance lines from swing-pivot clusters labelled by strength and touch count (×N). Lines are recalculated per timeframe and on every new candle. The chart also shows the current call (arrow plus a dotted target zone).
-- **Signal:** the 1h call (UP, DOWN or NEUTRAL arrow), confidence, entry, target zone, expiry (Bahrain time), an UNTESTED badge and the top 3 reasons, then per-input votes and an indicator snapshot. **Predict now** logs a manual signal.
+- **Signal:** the 1h call (UP, DOWN or NEUTRAL arrow), confidence, entry, target zone, expiry (Bahrain time), an UNTESTED badge and the top 3 reasons. **Predict now** logs a manual signal. **Manual 1-hour Rise/Fall** places a single trade from the phone (never auto, so it does not double the box hourly bot).
 - **Stats:** overall hit rate vs 50% with n, Wilson 95% CI and binomial p-value. It also shows slices by hour (Bahrain), regime, S/R proximity (near-level vs mid-range), confidence, direction and type. A slice is flagged *edge candidate* only at ≥55% with n≥50 and p<0.05. This screen also has paper trading (balance, stake, payout %, P&L curve), the full log, and CSV/JSON export and import. Data is stored in localStorage.
 
 ## Signal log on the phone
 
 The box logger is not reachable from a phone on the public web, so **Sync signal log** first tries `data/signals.json` (a public snapshot committed next to the app) and then `logger/data/signals.json` (only works when you serve this folder from the box). CSV/JSON import still works as a fallback.
 
-Automatic hourly git pushes from the box are not set up: the box has no GitHub credentials, and a token will not be stored in this repository. Until a box-side credential exists (an environment variable or git credential, never committed), refresh the published snapshot by updating `data/signals.json` in the repo, or Import a file on the phone.
+The published snapshot is `data/signals.json` in this repo (plus `data/demo.json` for the box auto-trader). A Deriv trading token is never stored in the repository. Refresh the snapshot by updating those files, or Import a file on the phone.
 
 ## Headless logger (box)
 `logger/logger.js` uses the same `shared/core.js` as the app.
@@ -59,5 +59,14 @@ Rise/Fall payouts on Deriv are **below 100%** of stake (check your trade ticket;
   - Auth: Deriv new Options API. PAT token + App ID read from a chmod-600 secrets file on the box, outside the repo (`DERIV_DEMO_TOKEN`, `DERIV_APP_ID`), never committed. `GET /accounts` → demo account → `POST /accounts/{id}/otp` → `wss://api.derivws.com/trading/v1/options/ws/demo?otp=…`. Refuses unless the account is `demo` and the socket is the `/ws/demo` endpoint.
   - Guards: max 1 open trade, daily loss cap (default $5, Bahrain day), kill switch (`touch logger/data/KILL`), `enabled:false` in config.
   - Results go into each signal's `demo_trade` field; a sanitized status is written to `data/demo.json` for the phone.
-  - Reset demo balance (Deriv default $10,000): `touch logger/data/RESET_DEMO_BALANCE` or `node logger/demo-trader.js --reset-balance`. The phone button resets the local paper balance and explains that the Deriv reset runs from the box (the phone never holds the token).
+  - Reset demo balance (Deriv default $10,000) from the box: `touch logger/data/RESET_DEMO_BALANCE` or `node logger/demo-trader.js --reset-balance`.
   - CLI: `node logger/demo-trader.js --check | --test-trade 0.35 buy | --settle | --reset-balance`.
+
+## v2.1 (Nov 2026): in-app account connection
+
+- Tap **Connect** in the header, paste a Deriv access token (masked input), and connect. The token is saved only in this browser's `localStorage`. **Disconnect** clears it.
+- The public App ID lives in `config/deriv.js` (not a secret). No token belongs in that file or in git.
+- Auth uses Deriv's Options API from the browser: `GET /trading/v1/options/accounts` (Bearer token + `Deriv-App-ID` header) → pick Demo (default) or Real → `POST /accounts/{id}/otp` → `wss://api.derivws.com/trading/v1/options/ws/demo?otp=…` (or the official real socket). The app refuses unexpected hosts and refuses a non-demo socket while Demo is selected.
+- The panel follows the sample Account UI: Demo/Real switch, large balance, account id prefix, **Reset Demo Balance** (demo only, no threshold; Deriv's error is shown if refused), Disconnect.
+- A **REAL ACCOUNT** banner appears in Real mode, and every real-money trade requires confirmation. The box hourly auto-trader stays demo-only.
+- Phone trading is manual only (Rise/Fall, 1h, stake default $1). It does not fire on the hour.

@@ -1393,5 +1393,123 @@
   "reason": "Hourly signal missed for 2026-11-15T05:00:00Z: no on-time entry was recorded (logger down, tick stall, or restart after the 60s window).",
   "note": "Hourly signal missed for 2026-11-15T05:00:00Z: no on-time entry was recorded (logger down, tick stall, or restart after the 60s window).",
   "issued_actual_utc": "2026-11-15T05:01:15.161Z"
+ },
+ {
+  "schema_version": 2,
+  "id": "1HZ25V-1794722400-hz7bn",
+  "signal_type": "hourly",
+  "source": "logger",
+  "symbol": "1HZ25V",
+  "issued_epoch": 1794722400,
+  "issued_utc": "2026-11-15T06:00:00Z",
+  "issued_bahrain": "2026-11-15 09:00:00 +03:00",
+  "hour_bahrain": 9,
+  "timeframe": "1h",
+  "duration_sec": 3600,
+  "due_epoch": 1794726000,
+  "due_utc": "2026-11-15T07:00:00Z",
+  "due_bahrain": "2026-11-15 10:00:00 +03:00",
+  "direction": "buy",
+  "confidence": 55.5,
+  "score": 0.1932,
+  "price_at_signal": 903777.83,
+  "target_zone": {
+   "low": 904662.18,
+   "high": 907315.21,
+   "basis": "ATR(14,1h)"
+  },
+  "sr": {
+   "nearest_level": 902736.62,
+   "nearest_type": "support",
+   "nearest_touches": 10,
+   "nearest_strength": "strong",
+   "distance_abs": 1041.21,
+   "distance_pct": 0.1152,
+   "distance_atr": 0.294,
+   "zone": "near-level"
+  },
+  "regime": {
+   "label": "normal",
+   "rv_ann_pct": 25.21,
+   "rv_avg_ann_pct": 24.3,
+   "ratio": 1.038,
+   "atr_1h": 3537.38
+  },
+  "indicators": {
+   "ema20": 898501.72,
+   "ema50": 898504.66,
+   "ema200": 905803.87,
+   "ema50_slope_atr": 0.151,
+   "rsi14": 60.88,
+   "macd": 1590.242,
+   "macd_signal": 1060.237,
+   "macd_hist": 530.006,
+   "macd_hist_prev": 375.451,
+   "bb_upper": 903515.56,
+   "bb_mid": 898590.14,
+   "bb_lower": 893664.73,
+   "bb_pctb": 1.018,
+   "bb_width": 0.01096,
+   "bb_squeeze": true,
+   "atr14_1h": 3537.38
+  },
+  "structure": {
+   "1d": "LH/HL (contracting)",
+   "4h": "LH/LL (downtrend)",
+   "1h": "LH/HL (contracting)",
+   "15m": "HH/HL (uptrend)"
+  },
+  "votes": {
+   "structure": -0.15,
+   "sr": 0.706,
+   "ema": -0.131,
+   "rsi": 0.261,
+   "macd": 1,
+   "bb": -0.6,
+   "hour": 0.049
+  },
+  "weights": {
+   "structure": 0.3,
+   "sr": 0.25,
+   "ema": 0.15,
+   "macd": 0.1,
+   "rsi": 0.08,
+   "bb": 0.07,
+   "hour": 0.05
+  },
+  "reasons": [
+   "Price is 0.29×ATR from support 902736.62 (10 touches, strong), expecting a bounce up",
+   "MACD histogram positive and rising",
+   "Swing structure bearish (D: LH/HL (contracting), 4h: LH/LL (downtrend), 1h: LH/HL (contracting), 15m: HH/HL (uptrend))"
+  ],
+  "edge_status": "untested",
+  "status": "open",
+  "outcome_price": null,
+  "outcome_epoch": null,
+  "outcome_utc": null,
+  "outcome_bahrain": null,
+  "move_abs": null,
+  "move_pct": null,
+  "in_target_zone": null,
+  "result": null,
+  "issued_actual_utc": "2026-11-15T06:00:03.285Z",
+  "demo_trade": {
+   "status": "skipped",
+   "test": false,
+   "contract_type": "CALL",
+   "stake": 1,
+   "contract_id": null,
+   "buy_price": null,
+   "payout": null,
+   "profit": null,
+   "result": null,
+   "entry_spot": null,
+   "exit_spot": null,
+   "placed_utc": "2026-11-15T06:00:03.289Z",
+   "settled_utc": null,
+   "account_type": null,
+   "account_prefix": null,
+   "reason": "not connected: Deriv App ID missing (PAT tokens need one)"
+  }
  }
 ]

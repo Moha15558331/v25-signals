@@ -1,7 +1,7 @@
 {
   "name": "V25 Signals",
   "short_name": "V25 Signals",
-  "description": "Paper-trading signal lab for Deriv Volatility 25 (1s). Never places trades.",
+  "description": "Signal lab for Deriv Volatility 25 (1s): live chart, hourly calls, demo account trading.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

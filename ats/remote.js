@@ -37,12 +37,13 @@ const R = {
     } catch (e) { this.err = e.message; if (e.status === 401) this.authBad = true; }
     this.changed();
   },
-  kick() { clearTimeout(this._t); const loop = async () => { if (!document.hidden && this.hasKey()) await this.refresh(); this._t = setTimeout(loop, this.st && (this.st.bot.running || this.st.bot.open) ? 2500 : 6000); }; loop(); },
+  kick() { clearTimeout(this._t); const loop = async () => { if (!document.hidden && this.hasKey()) await this.refresh(); const st = this.st; this._t = setTimeout(loop, st && (st.bot.running || st.bot.open || (st.rf && (st.rf.running || st.rf.open))) ? 2500 : 6000); }; loop(); },
   async act(method, path, body) { this.busy = true; this.changed();
     try { const d = await this.api(method, path, body); if (d.status) this.st = d.status; await this.refresh(true); return d; } finally { this.busy = false; this.changed(); } },
-  start() { return this.act('POST', '/api/bot/start'); },
-  stop() { return this.act('POST', '/api/bot/stop'); },
+  start(bot) { return this.act('POST', '/api/bot/start' + (bot === 'rf1h' ? '?bot=rf1h' : '')); },
+  stop(bot) { return this.act('POST', '/api/bot/stop' + (bot === 'rf1h' ? '?bot=rf1h' : '')); },
   saveParams(params) { return this.act('PUT', '/api/settings', { params }); },
+  saveRf(rf_params) { return this.act('PUT', '/api/settings', { rf_params }); },
   saveGlobal(g) { return this.act('PUT', '/api/settings', { global: g }); },
   newSession() { return this.act('POST', '/api/session/new'); },
   realOn() { return this.act('POST', '/api/real', { enable: true, confirm: true, key: get(LS.key) }); },

@@ -8,13 +8,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ATS">
 <meta name="application-name" content="ATS">
-<meta name="app-version" content="3.0.0">
+<meta name="app-version" content="3.1.0">
 <meta name="description" content="Auto Trading System: a Rise/Fall bot on Volatility 25 (1s) for your Deriv account, demo first.">
 <title>ATS · Auto Trading System</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head><body class="theme-dark">
 <header id="top">
   <button type="button" class="icon-btn menu-btn" id="menuBtn" aria-label="Menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
@@ -105,6 +105,7 @@
     <button type="button" class="ats-limits" id="atsLimitsEdit"><span id="atsLimits"></span><span class="muted">Edit</span></button>
     <button type="button" class="ats-newsess" id="atsNewSession" hidden>Start a new session (P&amp;L back to $0)</button>
   </div>
+  <div class="card model-card" id="atsModel" hidden></div>
   <div class="seg" id="atsSeg"><button type="button" data-v="bots" class="on">Bot</button><button type="button" data-v="history">History</button></div>
   <div id="atsBots" class="bot-grid"></div>
   <div id="atsHistory" hidden>
@@ -120,11 +121,11 @@
 </main>
 <div class="toast" id="toast" hidden></div>
 
-<script src="shared/core.js?v=4"></script>
-<script src="config/deriv.js?v=4"></script>
-<script src="shared/deriv-account.js?v=4"></script>
-<script src="shared/ats-engine.js?v=4"></script>
-<script src="app.js?v=4"></script>
-<script src="remote.js?v=4"></script>
-<script src="ats.js?v=4"></script>
+<script src="shared/core.js?v=5"></script>
+<script src="config/deriv.js?v=5"></script>
+<script src="shared/deriv-account.js?v=5"></script>
+<script src="shared/ats-engine.js?v=5"></script>
+<script src="app.js?v=5"></script>
+<script src="remote.js?v=5"></script>
+<script src="ats.js?v=5"></script>
 </body></html>

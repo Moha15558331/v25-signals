@@ -283,7 +283,7 @@ function accountName() {
 const botState = b => (b.running || b.open) ? (b.running ? 'Running' : 'Stopping') : b.status === 'halted' ? 'Halted' : 'Idle';
 function render() { if (!$('tab-ats')) return; const srv = RSRV();
   $('atsFineServer').hidden = !srv; $('atsFineLocal').hidden = srv; $('atsNewSession').style.display = srv ? '' : 'none'; $('atsHistMode').style.display = srv ? 'none' : '';
-  renderDash(); if (view === 'bots') renderBots(); else renderHistory(); if (openBot) renderBotLive(); }
+  renderDash(); renderModel(); if (view === 'bots') renderBots(); else renderHistory(); if (openBot) renderBotLive(); }
 function renderDashRemote() {
   const r = RM(), st = r.st;
   $('atsName').textContent = accountName(); $('atsReal').hidden = true;
@@ -299,13 +299,41 @@ function renderDashRemote() {
   $('atsTrades').textContent = se.trades; $('atsWin').textContent = pct(se.winrate); $('atsOpen').textContent = se.open;
   const on = b.running || b.open, la = st.last_analysis;
   const stake = on && b.next_stake != null ? `Next stake $${(+b.next_stake).toFixed(2)}${b.step ? ' · martingale step ' + b.step : ' · base stake'}` : '';
-  const an = la ? `Last analysis: ${la.dir ? (la.dir === 'up' ? 'Rise' : 'Fall') + ' ' + la.conf + '%' : 'neutral'} on ${esc(la.tf)} candles · ${bhTime(la.at)}` : '';
+  const an = la ? (la.model ? `Last model call: ${la.score > 0.5 ? 'Rise' : 'Fall'} ${la.conf}% ${la.dir ? '· traded signal' : '· below the bar'} · ${bhTime(la.at)}` : `Last analysis: ${la.dir ? (la.dir === 'up' ? 'Rise' : 'Fall') + ' ' + la.conf + '%' : 'neutral'} on ${esc(la.tf)} candles · ${bhTime(la.at)}`) : '';
   const ago = Math.round((Date.now() - r.lastOk) / 1000);
   const line = r.err ? `<div class="srv-line err"><i class="dot"></i>Server unreachable: ${esc(r.err)}</div>` : `<div class="srv-line"><i class="dot"></i>${on ? 'Running on your server 24/7' : 'Connected to your server'} · updated ${ago < 2 ? 'just now' : ago + 's ago'}</div>`;
   $('atsStatus').innerHTML = on ? `<i class="pulse"></i><span><b>Rise/Fall ${b.running ? 'running' : 'stopping'}</b> · V25 (1s) · ${esc(b.cycle)} · DEMO<br><small class="muted">${esc(b.msg || '')}</small>${stake ? `<br><small class="muted">${esc(stake)}</small>` : ''}${an ? `<br><small class="muted">${an}</small>` : ''}${line}</span>`
     : `<i class="pulse off"></i><span>${b.state === 'halted' ? 'Bot stopped: ' + esc(b.halt_reason || '') : 'No bot running on the server'}${an ? `<br><small class="muted">${an}</small>` : ''}${line}</span>`;
   $('atsStopAll').disabled = !on || r.busy;
   $('atsLimits').textContent = `ATS limits for this session: stop at −$${(+st.global.sl).toFixed(2)} or +$${(+st.global.tp).toFixed(2)}`;
+}
+/* ---- Model test card (server mode): live forward-test stats from /api/status .model ---- */
+const pct1 = x => x == null ? '—' : (x * 100).toFixed(1) + '%';
+const modelBar = () => { const m = RM() && RM().st && RM().st.model; return m ? (50 + m.threshold * 100).toFixed(1) : '61.7'; };
+function ciBar(b) { // 40%..70% scale with the 95% range, the point estimate and the break-even line
+  const lo = 0.40, hi = 0.70, x = v => Math.max(0, Math.min(100, (v - lo) / (hi - lo) * 100));
+  if (!b.n) return `<div class="ci"><i class="be" style="left:${x(b.breakeven)}%"></i></div>`;
+  const cls = b.verdict.code === 'beating' ? 'up' : b.verdict.code === 'losing' ? 'dn' : '';
+  return `<div class="ci"><span class="rng ${cls}" style="left:${x(b.ci95[0])}%;width:${Math.max(1, x(b.ci95[1]) - x(b.ci95[0]))}%"></span><i class="pt ${cls}" style="left:${x(b.winrate)}%"></i><i class="be" style="left:${x(b.breakeven)}%"></i></div>
+    <div class="ci-axis"><span>40%</span><span>break-even ${pct1(b.breakeven)}</span><span>70%</span></div>`;
+}
+function renderModel() {
+  const el = $('atsModel'); if (!el) return; const st = RSRV() && RM() && RM().st; const m = st && st.model;
+  const show = !!(m && (st.bot.strategy === 'model10m' || (st.bot.params && st.bot.params.strategy === 'model10m') || m.calls));
+  el.hidden = !show; if (!show) return;
+  const t = m.trades, s = m.signal_accuracy, d = m.day, lc = m.last_call, on = st.bot.running && st.bot.strategy === 'model10m';
+  const vcls = c => c === 'beating' ? 'ok' : c === 'losing' ? 'bad' : 'warn';
+  const dayTxt = d ? (d.state === 'locked' ? `<span class="pill ok">Locked +$${(+d.lock).toFixed(2)}</span>` : d.state === 'stopped' ? `<span class="pill bad">Stopped −$${(+d.stop).toFixed(2)}</span>` : d.state === 'trading' ? '<span class="pill">Trading</span>' : '') : '';
+  const callTxt = lc ? `${lc.dir === 'up' ? 'Rise' : 'Fall'} ${lc.conf}% · ${bhTime(lc.T)}${lc.traded ? ' · traded' : lc.signal ? ' · ' + esc(lc.skip || 'signal') : ' · below bar'}${lc.result ? ' · ' + (lc.result === 'win' ? 'won ' : 'lost ') + money(lc.profit, true) : ''}` : 'none yet';
+  el.innerHTML = `<div class="row-between"><div><div class="bv-sec" style="margin:0">Model test · 10m neural net</div><small class="muted">Demo forward test since ${m.started_at ? bhStamp(m.started_at) : '—'} Bahrain · bar ${pct1(m.threshold_prob.rise_above)} sure</small></div>
+      <span class="model-live ${on ? 'on' : ''}"><i></i>${on ? 'LIVE' : 'OFF'}</span></div>
+    <div class="stats3 mt"><div><span class="eyebrow">Trades</span><b>${t.n}${t.open ? ` <small class="muted">+${t.open}</small>` : ''}</b></div><div><span class="eyebrow">Win rate</span><b>${pct1(t.winrate)}</b></div><div><span class="eyebrow">P&amp;L</span><b class="${t.pnl > 0 ? 'up' : t.pnl < 0 ? 'dn' : ''}">${money(t.pnl, true)}</b></div></div>
+    <div class="model-sec"><div class="row-between"><span class="eyebrow">Real demo trades · 95% range</span><span class="pill ${vcls(t.verdict.code)}">${t.n ? pct1(t.ci95[0]) + '–' + pct1(t.ci95[1]) : 'no trades yet'}</span></div>${ciBar(t)}<small class="muted">${esc(t.verdict.text)}</small></div>
+    <div class="model-sec"><div class="row-between"><span class="eyebrow">Every signal · ${s.n} scored${s.n ? ' · ' + pct1(s.winrate) + ' right' : ''}</span><span class="pill ${vcls(s.verdict.code)}">${s.n ? pct1(s.ci95[0]) + '–' + pct1(s.ci95[1]) : 'waiting'}</span></div>${ciBar(s)}<small class="muted">${esc(s.verdict.text)}</small></div>
+    <div class="srow"><div>Today${d && d.trades != null ? `<div class="n">${d.trades} trade${d.trades === 1 ? '' : 's'} · ${d.wins || 0}–${(d.trades || 0) - (d.wins || 0)}</div>` : ''}</div>${dayTxt}<b class="${(d && d.pnl) > 0 ? 'win' : (d && d.pnl) < 0 ? 'loss' : ''}">${money(d ? d.pnl : 0, true)}</b></div>
+    <div class="srow"><div>This week<div class="n">since ${esc(m.week.from.slice(5))} · ${m.week.trades} trades</div></div><span></span><b class="${m.week.pnl > 0 ? 'win' : m.week.pnl < 0 ? 'loss' : ''}">${money(m.week.pnl, true)}</b></div>
+    <div class="srow"><div>Calls<div class="n">${m.calls} checked · ${m.signals} cleared the bar${m.signals_per_day != null ? ' · ≈' + m.signals_per_day + '/day' : ''}</div></div><span></span><span></span></div>
+    <div class="srow"><div>Last call<div class="n">${callTxt}</div></div><span></span><small class="muted">${m.next_call_at ? 'next ' + bhTime(m.next_call_at) : ''}</small></div>`;
 }
 function renderDash() {
   if (RSRV()) return renderDashRemote();
@@ -331,9 +359,10 @@ function renderBots() {
     on = !!(x && (x.bot.running || x.bot.open)); state = !x ? 'Idle' : { running: 'Running', stopping: 'Stopping', halted: 'Halted' }[x.bot.state] || 'Idle'; }
   else { const s = DA.snapshot(), b = BOT; st = E.statsOf(rfRows(sessionRows(s.mode))); p = PARAMS[KEY]; on = b.running || b.open; state = botState(b); }
   const dir = { analysis: 'Analysis', up: 'Always Rise', down: 'Always Fall', alternate: 'Alternate' }[p.direction];
+  const isM = RON() && p.strategy === 'model10m';
   $('atsBots').innerHTML = `<button type="button" class="bot-card wide rf${on ? ' on' : ''}" data-bot="${KEY}"><span class="bot-icon">${ICON}</span><span class="bot-state ${state.toLowerCase()}">${state}</span>
-      <span class="bot-name">Rise / Fall · Volatility 25 (1s)</span><span class="bot-desc">${esc(T.desc)}</span>
-      <span class="bot-foot"><span>${esc(E.cycleLabel(p))} cycle · ${dir} · $${(+p.stake).toFixed(2)}${p.martingale ? ` · MG ×${p.mg_factor}` : ''}</span><b class="${st.pnl > 0 ? 'up' : st.pnl < 0 ? 'dn' : ''}">${st.trades ? money(st.pnl, true) : 'Open settings ›'}</b></span></button>`;
+      <span class="bot-name">Rise / Fall · Volatility 25 (1s)</span><span class="bot-desc">${isM ? 'Model test: 10-minute neural net, trades only its top 10% calls. Flat stake, no martingale. Demo only.' : esc(T.desc)}</span>
+      <span class="bot-foot"><span>${isM ? `10m model · $${(+p.model_stake).toFixed(2)} flat · day +$${(+p.day_tp).toFixed(2)} / −$${(+p.day_sl).toFixed(2)}` : `${esc(E.cycleLabel(p))} cycle · ${dir} · $${(+p.stake).toFixed(2)}${p.martingale ? ` · MG ×${p.mg_factor}` : ''}`}</span><b class="${st.pnl > 0 ? 'up' : st.pnl < 0 ? 'dn' : ''}">${st.trades ? money(st.pnl, true) : 'Open settings ›'}</b></span></button>`;
   $('atsBots').querySelectorAll('.bot-card').forEach(el => el.onclick = () => openBotView(KEY));
 }
 function histRows() { if (RON()) { const h = RM().hist; return h ? rfRows(h.rows) : []; } const m = histMode === 'current' ? DA.state.mode : histMode; return rfRows(HIST).filter(h => histMode === 'all' || h.mode === m); }
@@ -374,25 +403,29 @@ function renderBotView() {
   const lad = E.stakeLadder(p);
   const ladder = lad.map(x => `<span class="${x.over ? 'over' : ''}" title="raw $${x.raw}">$${x.stake.toFixed(2)}</span>`).join('<i>→</i>');
   const okRows = lad.filter(x => !x.over); const worst = okRows.length ? okRows[okRows.length - 1].cum : +p.stake;
-  const isTicks = p.cycle === 'ticks', isCustom = p.cycle === 'custom';
+  const isTicks = p.cycle === 'ticks', isCustom = p.cycle === 'custom'; const isModelP = RON() && p.strategy === 'model10m';
   $('atsBotView').innerHTML = `
     <div class="bv-head"><button type="button" class="icon-btn" id="bvBack" aria-label="Back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
       <span class="bot-icon sm rf">${ICON}</span><div class="bv-title"><h2>Rise / Fall bot</h2><div class="muted sm">Volatility 25 (1s) Index · ${SYM}</div></div></div>
     <div class="card bv-live" id="bvLive"></div>
     <form id="bvForm" autocomplete="off">
-      <div class="card"><div class="bv-sec">Trade</div>
+      ${RON() ? `<div class="card"><div class="bv-sec">Strategy</div>${F('What decides the trades', sel('strategy', p.strategy || 'classic', [['classic', 'Classic analysis (settings below)'], ['model10m', 'Model test · 10m neural net (demo)']]))}</div>` : ''}
+      ${isModelP ? `<div class="card"><div class="bv-sec">Model test <span class="req">demo only</span></div>
+        <div class="grid2">${F('Flat stake $', numIn('model_stake', p.model_stake, 0.01, E.MIN_STAKE), 'No martingale')}${F('Daily profit lock $', numIn('day_tp', p.day_tp, 0.5, 0.01), 'Done for the day once up this much')}${F('Daily stop $', numIn('day_sl', p.day_sl, 0.5, 0.01), 'Done for the day once down this much')}</div>
+        <small class="hint">Every 10 minutes the server scores V25 with the neural net from our edge search. It buys a 10-minute Rise/Fall only when the call is in its top 10% (above ${modelBar()}% sure), then waits for the next one. Each Bahrain day restarts at $0. Research result: 54.4% on 579 test trades, but that is not proven: break-even is 51.3%. This is a live test.</small></div>` : ''}
+      <div class="card${isModelP ? ' hide' : ''}"><div class="bv-sec">Trade</div>
         ${F('Direction', sel('direction', p.direction, DIR_OPTS), p.direction === 'analysis' ? 'Uses the V25 analysis on the cycle’s candles. No proven edge yet.' : '')}
         <div class="grid2">${F('Stake $', numIn('stake', p.stake, 0.01, E.MIN_STAKE), 'Min $0.35')}${F('Cycle', sel('cycle', p.cycle, E.CYCLE_OPTS))}</div>
         ${isCustom ? `<div class="field">Custom cycle<div class="dur">${numIn('custom_n', p.custom_n, 1, 1)}${sel('custom_u', p.custom_u, [['m', 'Minutes'], ['h', 'Hours']])}</div></div>` : ''}
         ${isTicks ? F('Ticks', sel('ticks', p.ticks, [...Array(10)].map((_, i) => [i + 1, (i + 1) + ' tick' + (i ? 's' : '')]))) : tog('align', p.align, 'Align to candle boundary')}
         <small class="hint">${esc(cycleHint(p))}</small></div>
-      <div class="card"><div class="row-between"><div class="bv-sec" style="margin:0">Martingale recovery</div>${tog('martingale', p.martingale, '')}</div>
+      <div class="card${isModelP ? ' hide' : ''}"><div class="row-between"><div class="bv-sec" style="margin:0">Martingale recovery</div>${tog('martingale', p.martingale, '')}</div>
         <div class="${p.martingale ? '' : 'dim'}"><div class="grid2" style="margin-top:12px">${F('Multiply stake by', numIn('mg_factor', p.mg_factor, 0.1, 1.01))}${F('Max steps', numIn('mg_max_steps', p.mg_max_steps, 1, 1))}</div>
         ${tog('mg_reset_win', p.mg_reset_win, 'Reset to base stake after a win')}
         ${p.martingale ? `<div class="ladder">${ladder}</div><small class="hint">Stakes are rounded to cents. After a loss the stake is multiplied. When the max steps are used up, or the next stake would pass your cap, the bot <b>stops</b>.</small>` : ''}</div></div>
       <div class="card"><div class="bv-sec">Risk limits <span class="req">required</span></div>
-        <div class="grid2">${F('Session stop-loss $', numIn('session_sl', p.session_sl, 0.5, 0.01))}${F('Take-profit $', numIn('session_tp', p.session_tp, 0.5, 0.01))}${F('Max losses in a row', numIn('max_consec_losses', p.max_consec_losses, 1, 1))}${F('Max stake cap $', numIn('max_stake', p.max_stake, 0.5, E.MIN_STAKE))}</div>
-        <small class="hint">The bot stops <b>before</b> any trade that could break a limit. Worst losing run: about $${worst.toFixed(2)}.</small></div>
+        <div class="grid2">${isModelP ? '' : F('Session stop-loss $', numIn('session_sl', p.session_sl, 0.5, 0.01)) + F('Take-profit $', numIn('session_tp', p.session_tp, 0.5, 0.01))}${F('Max losses in a row', numIn('max_consec_losses', p.max_consec_losses, 1, 1))}${F('Max stake cap $', numIn('max_stake', p.max_stake, 0.5, E.MIN_STAKE))}</div>
+        <small class="hint">The bot stops <b>before</b> any trade that could break a limit. ${isModelP ? `Worst day: −$${(+p.day_sl).toFixed(2)}. The ATS session limits on the dashboard still apply.` : `Worst losing run: about $${worst.toFixed(2)}.`}</small></div>
       <p class="fine warn-text" id="bvErr" hidden></p>
     </form>
     <div class="bv-trades card"><div class="bv-sec">This session's trades</div><ul class="trades" id="bvTrades"></ul></div>

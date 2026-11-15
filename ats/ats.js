@@ -301,7 +301,7 @@ function renderDashRemote() {
   const stake = on && b.next_stake != null ? `Next stake $${(+b.next_stake).toFixed(2)}${b.step ? ' · martingale step ' + b.step : ' · base stake'}` : '';
   const an = la ? `Last analysis: ${la.dir ? (la.dir === 'up' ? 'Rise' : 'Fall') + ' ' + la.conf + '%' : 'neutral'} on ${esc(la.tf)} candles · ${bhTime(la.at)}` : '';
   const ago = Math.round((Date.now() - r.lastOk) / 1000);
-  const line = r.err ? `<div class="srv-line err"><i class="dot"></i>Server unreachable: ${esc(r.err)}</div>` : `<div class="srv-line"><i class="dot"></i>Running on your server 24/7 · updated ${ago < 2 ? 'just now' : ago + 's ago'}</div>`;
+  const line = r.err ? `<div class="srv-line err"><i class="dot"></i>Server unreachable: ${esc(r.err)}</div>` : `<div class="srv-line"><i class="dot"></i>${on ? 'Running on your server 24/7' : 'Connected to your server'} · updated ${ago < 2 ? 'just now' : ago + 's ago'}</div>`;
   $('atsStatus').innerHTML = on ? `<i class="pulse"></i><span><b>Rise/Fall ${b.running ? 'running' : 'stopping'}</b> · V25 (1s) · ${esc(b.cycle)} · DEMO<br><small class="muted">${esc(b.msg || '')}</small>${stake ? `<br><small class="muted">${esc(stake)}</small>` : ''}${an ? `<br><small class="muted">${an}</small>` : ''}${line}</span>`
     : `<i class="pulse off"></i><span>${b.state === 'halted' ? 'Bot stopped: ' + esc(b.halt_reason || '') : 'No bot running on the server'}${an ? `<br><small class="muted">${an}</small>` : ''}${line}</span>`;
   $('atsStopAll').disabled = !on || r.busy;

@@ -9,16 +9,15 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ATS">
 <meta name="application-name" content="ATS">
-<meta name="app-version" content="4.0.2">
+<meta name="app-version" content="4.0.3">
 <meta name="description" content="ATS bot: Differs on the least digit with Rise/Fall recovery on Volatility 25 (1s). Runs 24/7 on your server. Demo by default.">
 <title>ATS · Auto Trading System</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=42">
+<link rel="stylesheet" href="style.css?v=43">
 <script>try{var t=localStorage.getItem('ats.theme2')||'auto';var d=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){document.documentElement.dataset.theme='dark';}</script>
 </head><body>
-<div class="bg-glow" aria-hidden="true"></div>
 <header class="top" id="top">
   <div class="brand">
     <span class="logo"><svg viewBox="0 0 32 32" aria-hidden="true"><defs><linearGradient id="lg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7c8cff"/><stop offset="1" stop-color="#22d3a6"/></linearGradient></defs><rect x="1" y="1" width="30" height="30" rx="9" fill="url(#lg)"/><path d="M8 20.5l4.5-5 3.5 3 7.5-8.5" fill="none" stroke="#fff" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23.5" cy="10" r="2.2" fill="#fff"/></svg></span>
@@ -34,7 +33,7 @@
     <div class="pair-card card" id="pairCard" hidden>
       <div class="pair-ico"><svg viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="10" rx="3"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg></div>
       <h2>Connect your server</h2>
-      <p class="muted">Enter the one-time pairing code (or the server key) once. It stays only on this phone.</p>
+      <p class="muted">Enter the pairing code or server key.</p>
       <input type="password" id="pairInput" class="field" placeholder="ABCD-2345" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
       <button type="button" class="btn primary block" id="pairBtn">Connect</button>
       <p class="err-txt" id="pairErr"></p>
@@ -43,7 +42,7 @@
     <div id="homeMain">
       <div class="card hero" id="heroCard">
         <div class="hero-top">
-          <div><span class="eyebrow">Today</span><div class="big-pnl" id="dayPnl">$0.00</div><div class="sub" id="daySub">Bahrain day · resets 00:00</div></div>
+          <div><span class="eyebrow">Today</span><div class="big-pnl" id="dayPnl">$0.00</div><div class="sub" id="daySub">Resets at 00:00</div></div>
           <div class="hero-side"><span class="chip" id="dayChip">Trading</span><button type="button" class="link" id="resetTodayBtn">Reset today</button></div>
         </div>
         <div class="pbar" id="pbar" aria-label="Today against the daily stop and lock">
@@ -65,7 +64,7 @@
 
       <div class="card phase-card" id="phaseCard">
         <div class="phase-head">
-          <div><span class="eyebrow">Phase</span><div class="phase-name" id="phaseName">Differs</div><div class="sub" id="phaseSub">Least-occurring digit · 1 tick</div></div>
+          <div><span class="eyebrow">Phase</span><div class="phase-name" id="phaseName">Differs</div><div class="sub" id="phaseSub">Least digit · 1 tick</div></div>
           <div class="digit-ring" id="digitRing"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" class="ring-bg"/><circle cx="32" cy="32" r="28" class="ring-fg" id="ringFg"/></svg><span id="digitBig">–</span><small>DIFFERS</small></div>
         </div>
         <div class="ladder" id="ladder"></div>
@@ -83,7 +82,7 @@
 
   <!-- STATS -->
   <section class="view" id="v-stats" hidden>
-    <h1 class="page-title">Win rate <span>by condition</span></h1>
+    <h1 class="page-title">Stats</h1>
     <div id="statsBody"><div class="card"><p class="muted">Loading…</p></div></div>
   </section>
 
@@ -97,7 +96,7 @@
 
   <!-- SETTINGS -->
   <section class="view" id="v-settings" hidden>
-    <h1 class="page-title">Bot settings</h1>
+    <h1 class="page-title">Settings</h1>
     <div id="setBody"></div>
   </section>
 </main>
@@ -109,12 +108,12 @@
   <button type="button" data-go="settings"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Settings</span></button>
 </nav>
 
-<button type="button" class="upd-bar" id="updBar" hidden>Update available — tap to reload</button>
+<button type="button" class="upd-bar" id="updBar" hidden>Update available</button>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="sheet-wrap" id="sheetWrap" hidden><div class="sheet-bg" id="sheetBg"></div><div class="sheet" id="sheet" role="dialog"></div></div>
 
-<script src="shared/ats-engine.js?v=42"></script>
-<script src="shared/hybrid.js?v=42"></script>
-<script src="remote.js?v=42"></script>
-<script src="app.js?v=42"></script>
+<script src="shared/ats-engine.js?v=43"></script>
+<script src="shared/hybrid.js?v=43"></script>
+<script src="remote.js?v=43"></script>
+<script src="app.js?v=43"></script>
 </body></html>

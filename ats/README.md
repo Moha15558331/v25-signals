@@ -19,7 +19,7 @@ A standalone home-screen web app (PWA) that runs one **Rise/Fall bot on Volatili
 
 The bot can run 24/7 on Mohamed's server (`ats-server`, `/opt/ats`, systemd `ats.service`), **demo account only**. The app becomes the remote control: dashboard, start/stop, Stop all, settings, history and win rate all come from the server's HTTPS API (`https://ats.2-29-170-227.sslip.io`, Let's Encrypt via Caddy).
 
-- Account (top right) → **Server · 24/7** → paste the ATS server key once. It is kept only in this phone's localStorage (never in this repo). Wrong keys are locked out on the server.
+- Account (top right) → **Server · 24/7** → enter the one-time pairing code (or the server key) once. It is kept only in this phone's localStorage (never in this repo). Wrong keys are locked out on the server.
 - The server checks the account is demo before every bot session (REST account type, demo OTP endpoint, login id) and refuses otherwise. It never trades real money.
 - State, settings, history and session P&L are saved on the server and survive restarts; an open contract is settled and martingale continues at the right step.
 - Balance is the whole demo account; ATS P&L and win rate count only ATS contracts.

@@ -109,7 +109,14 @@ $('wRunPhone').onclick = () => { const R = window.ATSRemote; if (!R || R.mode() 
   if (R.st && (R.st.bot.running || R.st.bot.open) && !confirm('The server bot keeps running on its own. Switch this app to the phone bot anyway? (You can switch back any time.)')) return;
   R.setMode('local'); renderWallet(); };
 $('wSrvSave').onclick = async e => { e.stopPropagation(); const R = window.ATSRemote; const k = ($('wSrvKey').value || '').trim();
-  if (k.length < 32) { setWalletStatus('That key looks too short — paste the whole key', 'err'); return; }
+  if (/^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/.test(k)) { // one-time pairing code -> the server hands this phone its key
+    setWalletStatus('Pairing with your server…');
+    try { const r = await fetch(R.url() + '/api/pair', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code: k }), cache: 'no-store' }); const d = await r.json().catch(() => null);
+      if (!r.ok || !d || !d.key) { setWalletStatus((d && d.error) || 'Pairing failed', 'err'); return; }
+      R.setKey(d.key); $('wSrvKey').value = ''; toast('Paired. The bot now runs 24/7 on your server.'); await R.refresh(true); R.kick(); }
+    catch (err) { setWalletStatus('Server unreachable — check your internet', 'err'); }
+    renderWallet(); return; }
+  if (k.length < 32) { setWalletStatus('Paste the whole server key, or the 8-character pairing code', 'err'); return; }
   R.setKey(k); $('wSrvKey').value = ''; setWalletStatus('Checking the key…');
   try { await R.api('GET', '/api/status'); toast('Server connected. The bot now runs 24/7 on your server.'); await R.refresh(true); R.kick(); }
   catch (err) { R.forget(); R.setMode('server'); setWalletStatus(err.status === 401 ? 'Wrong key — check it and paste again' : err.message, 'err'); }

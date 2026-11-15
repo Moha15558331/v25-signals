@@ -1,0 +1,131 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0e17">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ATS">
+<meta name="application-name" content="ATS">
+<meta name="app-version" content="3.1.0">
+<meta name="description" content="Auto Trading System: a Rise/Fall bot on Volatility 25 (1s) for your Deriv account, demo first.">
+<title>ATS · classic (phone mode)</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="192x192" href="../icons/icon-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="../icons/apple-touch-icon.png">
+<link rel="stylesheet" href="style.css?v=5">
+</head><body class="theme-dark">
+<header id="top">
+  <button type="button" class="icon-btn menu-btn" id="menuBtn" aria-label="Menu"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg></button>
+  <div class="brand"><span class="brand-mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="8" width="14" height="11" rx="3"/><path d="M12 8V4M9 13h.01M15 13h.01M9.5 16.5h5"/></svg></span><span class="brand-txt"><b>ATS</b><small>Auto Trading System</small></span></div>
+  <button type="button" class="wallet-pill connect" id="walletPill" aria-label="Connect account"><span>Connect</span></button>
+</header>
+<div id="realBanner" class="real-banner" hidden>REAL ACCOUNT — the bot trades real money. It asks you to confirm before it starts.</div>
+
+<div class="app-menu-backdrop" id="menuBackdrop"></div>
+<nav class="app-menu" id="appMenu" aria-hidden="true" aria-label="Menu">
+  <div class="app-menu-header"><div class="app-menu-title">Menu</div><button type="button" class="app-menu-close" id="menuCloseBtn" aria-label="Close">×</button></div>
+  <button type="button" class="app-menu-item active" data-go="dash"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="9" rx="2"/><rect x="14" y="3" width="7" height="5" rx="2"/><rect x="14" y="12" width="7" height="9" rx="2"/><rect x="3" y="16" width="7" height="5" rx="2"/></svg>Dashboard</button>
+  <button type="button" class="app-menu-item" data-go="history"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5M12 7v5l3 2"/></svg>History &amp; win rate</button>
+  <div class="app-menu-sep"></div>
+  <div class="app-menu-label">Bot</div>
+  <button type="button" class="app-menu-item" data-go="bot:risefall"><span class="bot-icon sm rf"></span>Rise / Fall · V25 (1s)</button>
+  <div class="app-menu-footer">
+    <div class="theme-panel">
+      <div class="theme-panel-title">Appearance</div>
+      <div class="theme-options"><button type="button" class="theme-opt active" data-theme="dark">Dark</button><button type="button" class="theme-opt" data-theme="light">Light</button></div>
+    </div>
+  </div>
+</nav>
+
+<div class="wallet-drop" id="walletDrop" hidden>
+  <div class="wallet-panel" role="dialog" aria-labelledby="walletTitle">
+    <div class="wallet-panel-head">
+      <div class="wallet-panel-title" id="walletTitle">Account</div>
+      <button type="button" class="wallet-panel-close" id="wCloseBtn" aria-label="Close">×</button>
+    </div>
+    <div class="wallet-switch run-switch" id="wRunSwitch"><button type="button" id="wRunServer">Server · 24/7</button><button type="button" id="wRunPhone">This phone</button></div>
+    <div id="wServerSection" hidden>
+      <div id="wSrvKeyBox">
+        <p class="wallet-token-hint">The bot runs on your server around the clock (demo account only), even when this phone is locked. Enter your pairing code (or the server key) once. The key stays only on this phone.</p>
+        <input type="password" id="wSrvKey" class="wallet-token-input" autocorrect="off" placeholder="Pairing code, e.g. ABCD-2345" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <button type="button" class="wallet-btn reset" id="wSrvSave">Save key &amp; connect</button>
+      </div>
+      <div id="wSrvInfo" hidden>
+        <div class="wallet-big"><div class="num" id="wSrvBal">—</div></div>
+        <div class="wallet-id" id="wSrvId"></div>
+        <p class="wallet-token-hint srv-note">Server mode is demo only. Balance is the whole demo account; ATS P&amp;L counts only ATS trades.</p>
+        <button type="button" class="wallet-btn logout" id="wSrvForget">Remove key from this phone</button>
+      </div>
+    </div>
+    <div id="wPhoneSection">
+    <div id="wTokenSection">
+      <p class="wallet-token-hint">Paste your Deriv access token to connect. It stays only on this phone, never in the app source or GitHub.</p>
+      <input type="password" id="wTokenInput" class="wallet-token-input" placeholder="Paste token here…" autocomplete="off" spellcheck="false">
+      <button type="button" class="wallet-btn reset" id="wTokenConnectBtn">Connect with token</button>
+      <p class="wallet-token-help">Get a token: <a href="https://app.deriv.com/account/api-token" target="_blank" rel="noopener">app.deriv.com → API token</a> (enable Trade + Read scopes).</p>
+    </div>
+    <div id="wAccountSection" hidden>
+      <div class="wallet-switch">
+        <button type="button" id="wBtnDemo" class="active">Demo</button>
+        <button type="button" id="wBtnReal">Real</button>
+      </div>
+      <div class="wallet-big">
+        <div class="num" id="wBalance">—</div>
+        <div class="cur" id="wCurrency"></div>
+      </div>
+      <div class="wallet-id" id="wAccountId"></div>
+      <button type="button" class="wallet-btn reset" id="wResetBtn" disabled>Reset Demo Balance</button>
+      <button type="button" class="wallet-btn logout" id="wLogoutBtn">Disconnect</button>
+    </div>
+    </div>
+    <div class="wallet-status" id="wStatus"></div>
+  </div>
+</div>
+
+
+<main>
+<section id="tab-ats" class="tab active">
+ <div id="atsMain">
+  <div class="ats-real" id="atsReal" hidden>REAL MONEY MODE — the bot trades your real balance and asks before it starts.</div>
+  <div class="card ats-hero">
+    <div class="ats-hero-top">
+      <div><div class="ats-welcome">Welcome, <span id="atsName">Trader</span><button type="button" class="ats-edit" id="atsNameEdit" aria-label="Edit name"><svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 20h4L19 9l-4-4L4 16v4z"/></svg></button></div>
+      <div class="ats-sub">to the future of auto trading</div></div>
+      <span class="ats-mode off" id="atsMode">OFFLINE</span>
+    </div>
+    <div class="ats-pnl-row">
+      <div><span class="eyebrow">Session P&amp;L</span><b id="atsPnl" class="ats-big">$0.00</b><small class="muted" id="atsSince"></small></div>
+      <div class="r"><span class="eyebrow">Balance</span><b id="atsBal">—</b></div>
+    </div>
+    <div class="stats3"><div><span class="eyebrow">Trades</span><b id="atsTrades">0</b></div><div><span class="eyebrow">Win rate</span><b id="atsWin">—</b></div><div><span class="eyebrow">Open</span><b id="atsOpen">0</b></div></div>
+    <div class="ats-status" id="atsStatus"></div>
+    <button type="button" class="btn block stop" id="atsStopAll" disabled>Stop all bots</button>
+    <button type="button" class="ats-limits" id="atsLimitsEdit"><span id="atsLimits"></span><span class="muted">Edit</span></button>
+    <button type="button" class="ats-newsess" id="atsNewSession" hidden>Start a new session (P&amp;L back to $0)</button>
+  </div>
+  <div class="card model-card" id="atsModel" hidden></div>
+  <div class="seg" id="atsSeg"><button type="button" data-v="bots" class="on">Bot</button><button type="button" data-v="history">History</button></div>
+  <div id="atsBots" class="bot-grid"></div>
+  <div id="atsHistory" hidden>
+    <div class="seg sm" id="atsHistMode"><button type="button" data-m="current" class="on">This account</button><button type="button" data-m="demo">Demo</button><button type="button" data-m="real">Real</button><button type="button" data-m="all">All</button></div>
+    <div class="card"><div class="stats3" id="atsHistAll"></div><div class="section-title" style="margin:16px 0 4px">By side</div><div id="atsHistBots"></div></div>
+    <div class="card"><div class="row-between"><h3>Trades</h3><span><button type="button" class="btn sm" id="atsExport">Export CSV</button> <button type="button" class="btn sm danger" id="atsClear">Clear</button></span></div><ul class="trades" id="atsHistList"></ul></div>
+  </div>
+  <p class="fine" id="atsFineServer" hidden>The bot runs on your server 24/7, on the <b>demo</b> account only, so it keeps trading when this phone is locked or the app is closed. This app is the remote control: start, stop, settings and history all come from the server. Balance is the whole demo account (the V25 hourly demo trader uses it too); ATS P&amp;L and win rate count only ATS trades. The analysis has no proven edge yet and martingale raises stakes after losses, so the bot stops before any trade that could break your limits. Times are Bahrain (UTC+3).</p>
+  <p class="fine" id="atsFineLocal">The bot runs inside this app on your phone, so keep it open: iPhone pauses it when the screen locks or you switch apps. A contract that is already open still settles on Deriv and is recorded when you come back. Demo is the default. The analysis has no proven edge yet. Martingale raises the stake after losses and can drain a small account fast, so the bot stops before any trade that could break the limits you set. Your token stays only on this phone. Times are Bahrain (UTC+3).</p>
+ </div>
+ <div id="atsBotView" hidden></div>
+</section>
+</main>
+<div class="toast" id="toast" hidden></div>
+
+<script src="shared/core.js?v=5"></script>
+<script src="config/deriv.js?v=5"></script>
+<script src="shared/deriv-account.js?v=5"></script>
+<script src="shared/ats-engine.js?v=5"></script>
+<script src="app.js?v=5"></script>
+<script src="remote.js?v=5"></script>
+<script src="ats.js?v=5"></script>
+</body></html>

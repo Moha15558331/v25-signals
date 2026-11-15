@@ -50,6 +50,7 @@ const R = {
   realCap(cap, confirm) { return this.act('POST', '/api/real', { lifetime_cap: cap, confirm: confirm ? true : undefined }); },
   resetDemo() { return this.act('POST', '/api/demo/reset'); },
   resetToday() { return this.act('POST', '/api/day/reset'); },
+  clearHistory() { return this.act('POST', '/api/history/clear'); },
 };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) R.kick(); });
 window.ATSRemote = R;

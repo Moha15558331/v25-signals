@@ -9,13 +9,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ATS">
 <meta name="application-name" content="ATS">
-<meta name="app-version" content="4.0.1">
+<meta name="app-version" content="4.0.2">
 <meta name="description" content="ATS bot: Differs on the least digit with Rise/Fall recovery on Volatility 25 (1s). Runs 24/7 on your server. Demo by default.">
 <title>ATS · Auto Trading System</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=41">
+<link rel="stylesheet" href="style.css?v=42">
 <script>try{var t=localStorage.getItem('ats.theme2')||'auto';var d=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){document.documentElement.dataset.theme='dark';}</script>
 </head><body>
 <div class="bg-glow" aria-hidden="true"></div>
@@ -26,7 +26,7 @@
   </div>
   <button type="button" class="acct-pill" id="acctPill" aria-label="Account"><span class="badge" id="modeBadge"><i class="live-dot" id="liveDot"></i><span id="modeTxt">OFFLINE</span></span><span class="acct-bal" id="acctBal">—</span><svg class="chev" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button>
 </header>
-<div class="real-strip" id="realStrip" hidden><svg viewBox="0 0 24 24"><path d="M12 3l9 16H3z"/><path d="M12 10v4M12 17h.01"/></svg>REAL MONEY · caps: day −$2 · lifetime <span id="realStripCap">$10</span></div>
+<div class="real-strip" id="realStrip" hidden><span class="real-mini">REAL</span><span id="realStripTxt">Daily stop applies</span></div>
 
 <main id="main">
   <!-- HOME -->
@@ -66,7 +66,7 @@
       <div class="card phase-card" id="phaseCard">
         <div class="phase-head">
           <div><span class="eyebrow">Phase</span><div class="phase-name" id="phaseName">Differs</div><div class="sub" id="phaseSub">Least-occurring digit · 1 tick</div></div>
-          <div class="digit-ring" id="digitRing"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" class="ring-bg"/><circle cx="32" cy="32" r="28" class="ring-fg" id="ringFg"/></svg><span id="digitBig">–</span><small>avoid</small></div>
+          <div class="digit-ring" id="digitRing"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" class="ring-bg"/><circle cx="32" cy="32" r="28" class="ring-fg" id="ringFg"/></svg><span id="digitBig">–</span><small>DIFFERS</small></div>
         </div>
         <div class="ladder" id="ladder"></div>
         <div class="freq" id="freq"></div>
@@ -109,11 +109,12 @@
   <button type="button" data-go="settings"><svg viewBox="0 0 24 24"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg><span>Settings</span></button>
 </nav>
 
+<button type="button" class="upd-bar" id="updBar" hidden>Update available — tap to reload</button>
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="sheet-wrap" id="sheetWrap" hidden><div class="sheet-bg" id="sheetBg"></div><div class="sheet" id="sheet" role="dialog"></div></div>
 
-<script src="shared/ats-engine.js?v=41"></script>
-<script src="shared/hybrid.js?v=41"></script>
-<script src="remote.js?v=41"></script>
-<script src="app.js?v=41"></script>
+<script src="shared/ats-engine.js?v=42"></script>
+<script src="shared/hybrid.js?v=42"></script>
+<script src="remote.js?v=42"></script>
+<script src="app.js?v=42"></script>
 </body></html>

@@ -1,7 +1,28 @@
 /* ATS v4 app: remote control + dashboard for the server bot. Views: Home, Stats, History, Settings. */
 (() => {
 'use strict';
-if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js', { scope: './' }).catch(() => { }));
+const APP_VER = '4.0.2';
+(function watchUpdates() {
+  if (!('serviceWorker' in navigator)) return;
+  const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
+  let refreshing = false;
+  if (navigator.serviceWorker.controller) {
+    navigator.serviceWorker.addEventListener('controllerchange', () => { if (refreshing) return; refreshing = true; location.reload(); });
+  }
+  const track = reg => {
+    const nudge = sw => { if (!sw) return; try { sw.postMessage('skipWaiting'); } catch (e) { } show(); };
+    if (reg.waiting) nudge(reg.waiting);
+    reg.addEventListener('updatefound', () => {
+      const inst = reg.installing; if (!inst) return;
+      inst.addEventListener('statechange', () => { if (inst.state === 'installed' && navigator.serviceWorker.controller) nudge(reg.waiting || inst); });
+    });
+    const ping = () => reg.update().catch(() => { });
+    setInterval(ping, 60e3);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
+  };
+  const start = () => navigator.serviceWorker.register('./sw.js?v=8', { scope: './' }).then(track).catch(() => { });
+  if (document.readyState === 'complete') start(); else window.addEventListener('load', start);
+})();
 const R = window.ATSRemote, H = window.ATSHybrid, E = window.ATSEngine;
 const $ = id => document.getElementById(id);
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -22,6 +43,7 @@ const I = {
   target: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></svg>', wallet: '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="13" rx="3"/><path d="M16 12.5h.01M3 10h18"/></svg>',
   server: '<svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="7" rx="2"/><rect x="4" y="13" width="16" height="7" rx="2"/><path d="M8 7.5h.01M8 16.5h.01"/></svg>', refresh: '<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6"/></svg>',
   phone: '<svg viewBox="0 0 24 24"><rect x="7" y="3" width="10" height="18" rx="2.5"/><path d="M11 18h2"/></svg>', zap: '<svg viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M5 7h14M10 11v6M14 11v6M9 7V5h6v2M7 7l1 13h8l1-13"/></svg>',
 };
 const evIcon = l => ({ win: I.check, loss: I.x, error: I.alert, warn: I.swap, lock: I.lock, info: I.info }[l] || I.info);
 
@@ -69,8 +91,8 @@ function pumpEvents(st) { const evs = (st && st.events) || []; const top = evs.l
 /* ---------- sheets ---------- */
 function sheet(html, onMount) { dismissToasts(true); const w = $('sheetWrap'), s = $('sheet'); s.innerHTML = html; w.hidden = false; $('sheetBg').onclick = closeSheet; if (onMount) onMount(s); }
 function closeSheet() { $('sheetWrap').hidden = true; $('sheet').innerHTML = ''; }
-function ask({ title, text, ok = 'Continue', danger, html }) { return new Promise(res => {
-  sheet(`<h2>${esc(title)}</h2>${text ? `<p>${esc(text)}</p>` : ''}${html || ''}<div class="btns"><button type="button" class="btn ${danger ? 'real' : 'primary'} block" id="askOk">${esc(ok)}</button><button type="button" class="btn ghost block" id="askNo">Cancel</button></div>`, s => {
+function ask({ title, text, ok = 'Continue', danger, real, html }) { return new Promise(res => {
+  sheet(`<h2${real ? ' class="real-h"' : ''}>${esc(title)}</h2>${text ? `<p>${esc(text)}</p>` : ''}${html || ''}<div class="btns"><button type="button" class="btn ${real ? 'real' : danger ? 'danger' : 'primary'} block" id="askOk">${esc(ok)}</button><button type="button" class="btn ghost block" id="askNo">Cancel</button></div>`, s => {
     s.querySelector('#askOk').onclick = () => { closeSheet(); res(true); }; s.querySelector('#askNo').onclick = () => { closeSheet(); res(false); }; });
   $('sheetBg').onclick = () => { closeSheet(); res(false); }; }); }
 
@@ -82,13 +104,18 @@ document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.datas
 
 /* ---------- header ---------- */
 const isReal = st => !!(st && st.mode === 'real');
+const capOn = real => !!(real && +real.lifetime_cap > 0);
 function renderHeader() { const st = R.st, b = st && st.bot, on = !!(b && (b.running || b.open));
   const badge = $('modeBadge'), dot = $('liveDot');
   badge.className = 'badge ' + (!st ? 'off' : isReal(st) ? 'real' : '');
   $('modeTxt').textContent = !st ? (R.hasKey() ? (R.err ? 'OFFLINE' : 'CONNECTING') : 'NOT PAIRED') : (isReal(st) ? 'REAL' : 'DEMO') + ' · SERVER';
   dot.className = 'live-dot' + (on ? (b.running ? ' on' : ' warn') : '');
   const bal = st && st.account && st.account.balance; $('acctBal').textContent = bal == null ? '—' : '$' + Number(bal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  $('realStrip').hidden = !isReal(st); if (st && st.real) $('realStripCap').textContent = `$${(+st.real.lifetime_cap).toFixed(0)} (${money(st.real.room_left)} left)`;
+  $('realStrip').hidden = !isReal(st);
+  if (st && st.real && $('realStripTxt')) {
+    const day = 'Daily stop −$' + (+st.real.day_sl_max || 2).toFixed(0);
+    $('realStripTxt').textContent = capOn(st.real) ? `${day} · lifetime cap ${money(st.real.lifetime_cap)} (${money(st.real.room_left)} left)` : day;
+  }
   $('brandSub').textContent = on ? (b.running ? 'Live · 24/7' : 'Stopping…') : 'Auto Trading'; }
 
 /* ---------- home ---------- */
@@ -122,7 +149,7 @@ function renderHome() {
   const dg = hy.digit, big = $('digitBig'), ring = $('ringFg'); const C = 2 * Math.PI * 28;
   ring.style.strokeDasharray = C;
   if (rec) { const lr = hy.last_rec; big.innerHTML = lr ? (lr.dir === 'up' ? '↑' : '↓') : '…'; big.nextElementSibling.textContent = lr ? (lr.dir === 'up' ? 'rise' : 'fall') : 'thinking'; ring.style.strokeDashoffset = C * (1 - hy.step / hy.params.mg_max_steps); }
-  else { big.textContent = dg ? dg.digit : '–'; big.nextElementSibling.textContent = 'avoid'; ring.style.strokeDashoffset = dg ? C * (Math.min(10, dg.freq[dg.digit]) / 10) : C;
+  else { big.textContent = dg ? dg.digit : '–'; big.nextElementSibling.textContent = 'DIFFERS'; ring.style.strokeDashoffset = dg ? C * (Math.min(10, dg.freq[dg.digit]) / 10) : C;
     if (dg && prevDigit != null && dg.digit !== prevDigit) { big.classList.remove('pop'); void big.offsetWidth; big.classList.add('pop'); } prevDigit = dg ? dg.digit : null; }
   $('ladder').innerHTML = hyb ? hy.ladder.map(x => { const cur = on && (rec ? x.step === hy.step : x.step === 0); const done = rec && x.step > 0 && x.step < hy.step;
     return `<div class="rung${cur ? ' on' : ''}${x.step ? ' r' : ''}${done ? ' done' : ''}"><small>${x.step ? 'Step ' + x.step : 'Differs'}</small><b>$${x.stake.toFixed(2)}</b></div>`; }).join('') : '';
@@ -133,7 +160,7 @@ function renderHome() {
   const btn = $('goBtn'); btn.disabled = R.busy || (b.open && !b.running);
   btn.className = 'btn go block' + (on ? ' stop' : ''); $('goIco').innerHTML = on ? I.stop : I.play;
   $('goTxt').textContent = on ? (b.running ? 'Stop bot' : 'Stopping…') : `Start ATS bot${isReal(st) ? ' · REAL' : ''}`;
-  if (!on && isReal(st)) btn.className = 'btn real block'; btn.style.height = '58px';
+  if (!on && isReal(st)) btn.className = 'btn go real block'; btn.style.height = '58px';
   const ago = Math.round((Date.now() - R.lastOk) / 1000);
   $('statusLine').className = 'status-line' + (R.err ? ' err' : on ? ' on' : '');
   $('statusTxt').textContent = R.err ? 'Server unreachable: ' + R.err : (b.msg || 'Idle') + (ago > 8 ? ` · ${ago}s ago` : '');
@@ -151,7 +178,8 @@ function tradeRow(h, fresh) {
 $('goBtn').onclick = async () => { const st = R.st; if (!st) return; const b = st.bot;
   if (b.running || b.open) { try { await R.stop(); } catch (e) { errToast(e); } return; }
   if (isReal(st)) { const p = st.hybrid.params;
-    const ok = await ask({ title: 'Start on REAL money?', danger: true, ok: 'Start real trading', html: `<ul class="warn-list"><li>${I.alert}Differs $${(+p.stake).toFixed(2)}, recovery up to $${Math.min(H.recStake(p, p.mg_max_steps), +p.max_stake).toFixed(2)}</li><li>${I.alert}Stops for the day at −$${(+p.day_sl).toFixed(2)} or +$${(+p.day_tp).toFixed(2)}</li><li>${I.alert}Real mode turns off after ${money(st.real.lifetime_cap)} total real loss (${money(st.real.room_left)} left)</li><li>${I.alert}No tested edge: backtests lost money over time</li></ul>` });
+    const cap = capOn(st.real) ? `<li>${I.alert}Real mode turns off after ${money(st.real.lifetime_cap)} total real loss (${money(st.real.room_left)} left)</li>` : '';
+    const ok = await ask({ title: 'Start on real money?', real: true, ok: 'Start real trading', html: `<ul class="warn-list"><li>${I.alert}Differs $${(+p.stake).toFixed(2)}, recovery up to $${Math.min(H.recStake(p, p.mg_max_steps), +p.max_stake).toFixed(2)}</li><li>${I.alert}Stops for the day at −$${(+p.day_sl).toFixed(2)} or +$${(+p.day_tp).toFixed(2)}</li>${cap}<li>${I.alert}No tested edge: backtests lost money over time</li></ul>` });
     if (!ok) return; }
   try { await R.start(); } catch (e) { errToast(e); } };
 
@@ -175,6 +203,9 @@ function renderStats() {
     <div class="row"><div class="l"><b>Differs</b><small>${s.differs.n} trades · staked ${money(s.differs.staked)}</small></div><div class="r ${cls(s.differs.pnl)}">${money(s.differs.pnl, true)}</div></div>
     <div class="row"><div class="l"><b>Recovery</b><small>${s.recovery.n} trades · staked ${money(s.recovery.staked)}</small></div><div class="r ${cls(s.recovery.pnl)}">${money(s.recovery.pnl, true)}</div></div>
     <div class="row"><div class="l"><b>Total</b><small>${s.all.n} trades · ${pct(s.all.winrate)} won</small></div><div class="r ${cls(s.all.pnl)}">${money(s.all.pnl, true)}</div></div></div>
+  ${(() => { const lt = (R.st && R.st.real) || {}; return `<div class="card"><div class="card-h"><h3>Real lifetime</h3></div>
+    <div class="row"><div class="l"><b>Real P/L</b><small>${lt.lifetime_trades || 0} real trades</small></div><div class="r ${cls(lt.lifetime_pnl)}">${money(lt.lifetime_pnl, true)}</div></div>
+    ${capOn(lt) ? `<div class="row"><div class="l"><b>Loss cap</b><small>${money(lt.room_left)} left</small></div><div class="r">${money(lt.lifetime_cap)}</div></div>` : '<p class="note" style="margin:8px 0 0">No lifetime loss cap is set. The daily stop still applies.</p>'}</div>`; })()}
   <div class="card"><div class="card-h"><h3>P/L by hour</h3><span class="muted" style="font-size:12px">Bahrain</span></div>
     <div class="hours">${hrs.map(h => { const v = h ? h.pnl : 0, hh = Math.abs(v) / mx * 50; return `<div class="hb" title="${h ? h.hour + ':00 ' + money(v, true) : ''}">${v > 0 ? `<i class="p" style="height:${hh}%"></i>` : v < 0 ? `<i class="n" style="height:${hh}%"></i>` : ''}</div>`; }).join('')}</div>
     <div class="hours-axis"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div></div>
@@ -227,19 +258,25 @@ function renderSettings() {
     <div class="item"><span class="ic c3">${I.target}</span><div class="lab"><b>Stop at profit</b></div><span class="unit">$</span><input type="number" inputmode="decimal" step="0.5" data-g="tp" value="${gdraft.tp}"></div></div>
     <p class="note" style="margin:8px 6px 0">Session P/L ${money(st.session.pnl, true)} since ${fmtT(st.session.start, true)} · <button type="button" class="link" id="newSess"${on ? ' disabled' : ''}>Start a new session</button></p></div>
   <div class="group"><div class="group-t">Account</div><div class="list">
-    <div class="item"><span class="ic ${isReal(st) ? 'c4' : 'c1'}">${I.wallet}</span><div class="lab"><b>${isReal(st) ? 'Real account' : 'Demo account'}</b><small>${esc(st.account.prefix || '')} · balance ${st.account.balance == null ? '—' : money(st.account.balance)}</small></div><button type="button" class="link" id="openAcct">Switch</button></div>
-    <div class="item"><span class="ic c6">${I.refresh}</span><div class="lab"><b>Reset demo balance</b><small>Back to the default demo balance</small></div><button type="button" class="link" id="resetDemo">Reset</button></div>
+    <div class="item"><span class="ic ${isReal(st) ? 'c6' : 'c1'}">${I.wallet}</span><div class="lab"><b>${isReal(st) ? 'Real account' : 'Demo account'}</b><small>${esc(st.account.prefix || '')} · balance ${st.account.balance == null ? '—' : money(st.account.balance)}</small></div><button type="button" class="link" id="openAcct">Switch</button></div></div></div>
+  <div class="group"><div class="group-t">Real money</div><div class="list">
+    <div class="item"><span class="ic c6">${I.shield}</span><div class="lab"><b>Lifetime loss cap</b><small>${capOn(real) ? `${money(real.lifetime_lost)} lost so far · ${money(real.room_left)} left` : 'Off — real trading is not stopped by a lifetime cap. The daily stop still applies.'}</small></div><label class="switch"><input type="checkbox" id="capOn"${capOn(real) ? ' checked' : ''}><span></span></label></div>
+    ${capOn(real) ? `<div class="item"><span class="ic c6">${I.wallet}</span><div class="lab"><b>Cap amount</b><small>Real mode turns off if total real losses reach this</small></div><span class="unit">$</span><input type="number" inputmode="decimal" step="1" min="1" id="capIn" value="${real.lifetime_cap}"></div>` : ''}</div>
+    <p class="note" style="margin:8px 6px 0">Off by default. The daily stop is under Daily limits above, and still applies on real.</p></div>
+  <div class="group"><div class="group-t">Demo tools</div><div class="list">
     <div class="item"><span class="ic c3">${I.refresh}</span><div class="lab"><b>Reset today</b><small>${isReal(st) ? 'Disabled on real — the daily stop can’t be bypassed' : 'Clear today’s P/L and unlock trading. History is kept.'}</small></div><button type="button" class="link" id="resetTodaySet"${isReal(st) ? ' disabled' : ''}>Reset</button></div>
-    <div class="item"><span class="ic c4">${I.alert}</span><div class="lab"><b>Lifetime real-loss cap</b><small>${real.available ? `${money(real.lifetime_lost)} lost so far · ${money(real.room_left)} left` : 'Real mode needs a real token on the server'}</small></div><span class="unit">$</span><input type="number" inputmode="decimal" step="1" id="capIn" value="${real.lifetime_cap}"></div></div></div>
+    <div class="item"><span class="ic c6">${I.refresh}</span><div class="lab"><b>Reset demo balance</b><small>Back to the default demo balance. Real money is never touched.</small></div><button type="button" class="link" id="resetDemo">Reset</button></div>
+    <div class="item"><span class="ic c5">${I.trash}</span><div class="lab"><b>Clear history &amp; stats</b><small>${isReal(st) ? 'Disabled on real — real records can’t be erased' : 'Wipe demo trades, stats, alerts and today’s counters. Real records stay.'}</small></div><button type="button" class="link" id="clearHist"${isReal(st) ? ' disabled' : ''}>Clear</button></div></div>
+    <p class="note" style="margin:8px 6px 0">These only work on demo.</p></div>
   <div class="group"><div class="group-t">Appearance</div><div class="seg" id="themeSeg" style="margin:0">${['auto', 'light', 'dark'].map(t => `<button type="button" data-t="${t}" class="${pref === t ? 'on' : ''}">${t === 'auto' ? 'Automatic' : t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
   <div class="group"><div class="group-t">Server</div><div class="list">
     <div class="item"><span class="ic c5">${I.server}</span><div class="lab"><b>Connected</b><small>${esc(R.url().replace('https://', ''))}</small></div><button type="button" class="link" id="forgetKey" style="color:var(--red)">Unpair</button></div>
     <a class="item" href="legacy/" style="color:inherit;text-decoration:none"><span class="ic c5">${I.phone}</span><div class="lab"><b>Phone mode (classic app)</b><small>The older app that runs a bot inside this phone</small></div><svg class="chev" viewBox="0 0 24 24" style="transform:rotate(-90deg)"><path d="M7 10l5 5 5-5"/></svg></a></div></div>
-  <p class="note">ATS v4 · times are Bahrain (UTC+3). Nothing here has a proven edge; the daily stop is what keeps a bad day small.</p>
+  <p class="note">ATS v4.0.2 · times are Bahrain (UTC+3). Nothing here has a proven edge; the daily stop is what keeps a bad day small.</p>
   ${dirty ? `<div class="save-bar"><button type="button" class="btn ghost" id="discard">Discard</button><button type="button" class="btn primary" id="saveSet">Save changes</button></div>` : ''}`;
   el.querySelectorAll('[data-k]').forEach(inp => inp.oninput = inp.onchange = () => { const k = inp.dataset.k; draft[k] = inp.type === 'checkbox' ? inp.checked : inp.tagName === 'SELECT' ? inp.value : inp.value === '' ? '' : +inp.value; markDirty(); });
   el.querySelectorAll('[data-g]').forEach(inp => inp.oninput = () => { gdraft[inp.dataset.g] = +inp.value; markDirty(); });
-  el.querySelectorAll('input,select').forEach(x => { if (on && x.id !== 'capIn') x.disabled = true; });
+  el.querySelectorAll('input,select').forEach(x => { if (on && x.id !== 'capIn' && x.id !== 'capOn') x.disabled = true; });
   el.querySelectorAll('#stratSeg button').forEach(b => b.onclick = () => { if (on || b.disabled) return; draft.strategy = b.dataset.s; dirty = true; renderSettings(); });
   el.querySelectorAll('#themeSeg button').forEach(b => b.onclick = () => setTheme(b.dataset.t));
   const q = id => el.querySelector('#' + id);
@@ -248,8 +285,16 @@ function renderSettings() {
   q('newSess').onclick = async () => { if (await ask({ title: 'Start a new session?', text: 'Session P/L goes back to $0. History and daily limits stay.', ok: 'New session' })) R.newSession().then(() => toast({ level: 'info', title: 'New session started' }), errToast); };
   q('openAcct').onclick = openAccount; q('resetDemo').onclick = resetDemo;
   if (q('resetTodaySet')) q('resetTodaySet').onclick = resetToday;
-  q('capIn').onchange = async () => { const v = +q('capIn').value; if (!(v > 0)) return; const up = v > real.lifetime_cap;
-    if (up && !(await ask({ title: 'Raise the lifetime cap?', text: `Real mode will allow up to ${money(v)} of total real losses.`, ok: 'Raise cap', danger: true }))) { renderSettings(); return; }
+  if (q('clearHist')) q('clearHist').onclick = clearHistory;
+  if (q('capOn')) q('capOn').onchange = async () => {
+    try {
+      if (q('capOn').checked) { await R.realCap(10, false); toast({ level: 'info', title: 'Lifetime cap on', text: '$10.00 — you can change the amount' }); }
+      else { await R.realCap(0, false); toast({ level: 'info', title: 'Lifetime cap off' }); }
+      renderSettings();
+    } catch (e) { errToast(e); renderSettings(); }
+  };
+  if (q('capIn')) q('capIn').onchange = async () => { const v = +q('capIn').value; if (!(v >= 1)) { renderSettings(); return; } const up = v > +real.lifetime_cap;
+    if (up && !(await ask({ title: 'Raise the lifetime cap?', text: `Real mode will allow up to ${money(v)} of total real losses.`, ok: 'Raise cap' }))) { renderSettings(); return; }
     R.realCap(v, up).then(() => toast({ level: 'info', title: 'Lifetime cap set', text: money(v) }), errToast); };
   q('forgetKey').onclick = async () => { if (await ask({ title: 'Unpair this phone?', text: 'The key is removed from this phone. The server bot keeps running.', ok: 'Unpair', danger: true })) { R.forget(); render(); go('home'); } };
 }
@@ -263,8 +308,6 @@ function openAccount() { const st = R.st; if (!st) return; const real = st.real,
     ${!real.available ? `<div class="notice bad">${I.alert}<span>${esc(real.reason)}</span></div>` : ''}
     ${err ? `<div class="notice bad">${I.alert}<span>${esc(err)}</span></div>` : ''}
     ${real.disabled_reason && !rl ? `<p class="note" style="margin:0">Real mode last switched off: ${esc(real.disabled_reason)}</p>` : ''}
-    <div class="kv"><span>Lifetime real P/L</span><b class="${cls(real.lifetime_pnl)}">${money(real.lifetime_pnl, true)}</b></div>
-    <div class="kv"><span>Lifetime loss cap</span><b>${money(real.lifetime_cap)} · ${money(real.room_left)} left</b></div>
     <div class="btns">${rl ? '' : `<button type="button" class="btn block" id="shDay">${I.refresh} Reset today</button>`}<button type="button" class="btn ${rl ? 'block' : 'ghost block'}" id="shReset">${I.refresh} Reset demo balance</button><button type="button" class="btn ghost block" id="shClose">Done</button></div>`, s => {
     s.querySelector('#shClose').onclick = closeSheet;
     s.querySelector('#shReset').onclick = () => { closeSheet(); resetDemo(); };
@@ -274,8 +317,9 @@ $('acctPill').onclick = () => { if (!R.st) { if (!R.hasKey()) go('home'); return
 async function enableReal() { const st = R.st, real = st.real;
   if (!real.available) { sheet(`<h2>Real mode isn’t available</h2><p>${esc(real.reason)}</p><div class="btns"><button type="button" class="btn ghost block" id="realNo">OK</button></div>`, s => { s.querySelector('#realNo').onclick = closeSheet; }); return; }
   if (st.bot.running || st.bot.open) { sheet(`<h2>Stop the bot first</h2><p>Switch accounts only while the bot is stopped and the last contract has settled.</p><div class="btns"><button type="button" class="btn ghost block" id="realNo">OK</button></div>`, s => { s.querySelector('#realNo').onclick = closeSheet; }); return; }
-  sheet(`<h2 style="color:var(--red)">Switch to Real money</h2><p>The server bot will trade your real Deriv balance. These caps always apply:</p>
-    <ul class="warn-list"><li>${I.shield}Daily stop at most −$2 (Bahrain day)</li><li>${I.shield}No stake above the $${(+st.bot.params.max_stake).toFixed(2)} cap</li><li>${I.shield}Real mode turns itself off after ${money(real.lifetime_cap)} total real loss</li><li>${I.alert}Only the ATS bot runs on real. Backtests lost money over time.</li></ul>
+  const capLine = capOn(real) ? `<li>${I.shield}Real mode turns itself off after ${money(real.lifetime_cap)} total real loss</li>` : '';
+  sheet(`<h2 class="real-h">Switch to Real money</h2><p>The server bot will trade your real Deriv balance. The daily stop always applies:</p>
+    <ul class="warn-list"><li>${I.shield}Daily stop at most −$2 (Bahrain day), set under Settings</li><li>${I.shield}No stake above the $${(+st.bot.params.max_stake).toFixed(2)} cap</li>${capLine}<li>${I.alert}Only the ATS bot runs on real. Backtests lost money over time.</li></ul>
     <p class="warn-line">Real trades can lose money. The bot stays stopped until you press Start.</p>
     <div class="btns"><button type="button" class="btn real block" id="realGo">Switch to Real money</button><button type="button" class="btn ghost block" id="realNo">Stay on demo</button></div>`, s => {
     s.querySelector('#realNo').onclick = closeSheet;
@@ -289,6 +333,11 @@ async function resetToday() { const st = R.st; if (!st) return;
   if (!(await ask({ title: 'Reset today?', text: 'Today’s P/L and daily lock go back to $0. Trade history is kept, and you can start testing again right away.', ok: 'Reset today' }))) return;
   try { await R.resetToday(); catchUpEvents(R.st); toast({ level: 'info', title: 'Today reset', text: 'Daily P/L cleared · history kept' }); } catch (e) { errToast(e); } }
 if ($('resetTodayBtn')) $('resetTodayBtn').onclick = resetToday;
+async function clearHistory() { const st = R.st; if (!st) return;
+  if (isReal(st)) { sheet(`<h2>Can’t clear history on real</h2><p>Real records can’t be erased. Switch back to demo first.</p><div class="btns"><button type="button" class="btn ghost block" id="ok">OK</button></div>`, s => { s.querySelector('#ok').onclick = closeSheet; }); return; }
+  if (st.bot.running || st.bot.open) { sheet(`<h2>Stop the bot first</h2><p>Clear history only while the bot is stopped and the last contract has settled.</p><div class="btns"><button type="button" class="btn ghost block" id="ok">OK</button></div>`, s => { s.querySelector('#ok').onclick = closeSheet; }); return; }
+  if (!(await ask({ title: 'Clear history & stats?', text: 'Demo trades, stats, alerts and today’s counters are wiped. Real records stay. You can’t undo this.', ok: 'Clear history', danger: true }))) return;
+  try { await R.clearHistory(); catchUpEvents(R.st); toast({ level: 'info', title: 'History cleared', text: 'Demo trades, stats and today are gone' }); } catch (e) { errToast(e); } }
 
 /* ---------- pairing ---------- */
 $('pairBtn').onclick = async () => { const k = ($('pairInput').value || '').trim(); $('pairErr').textContent = '';

@@ -19,12 +19,12 @@ A remote control and dashboard for the **ATS bot**, which runs 24/7 on Mohamed's
 
 1. Put the real token on the server as `/opt/ats/.secrets/deriv-real.env`, with the line `DERIV_REAL_TOKEN=...` (owner `ats`, mode 600). No restart is needed.
 2. In the app, open Account (top right) → **Real**, then confirm on the red **Switch to Real money** sheet. The phone also sends its server key. Switching back to Demo is one tap.
-3. **Hard caps:** daily stop of $2 at most, no stake above the stake cap, and a lifetime real-loss cap (default $10, set under Settings → Account). When the cap is hit, real mode turns itself off and the bot stops.
+3. **Hard caps:** daily stop of $2 at most (adjustable under Settings → Daily limits), and no stake above the stake cap. An optional lifetime real-loss cap lives under Settings → Real money (Off by default). When that cap is on and is hit, real mode turns itself off and the bot stops.
 4. Only the ATS bot runs on real. Switching account requires the bot to be stopped, and it starts a fresh session.
 
-**Reset demo balance:** Account → Reset demo balance. It works on the demo token only.
+**Reset demo balance, Reset today, and Clear history & stats** live under Settings → Demo tools (Reset today is also on the Home card). They only work on demo. Clear history wipes demo trades, stats, alerts and today’s counters; real records are never erased.
 
-**Reset today:** Home (next to the Today card) or Settings → Reset today. Demo only: it clears today’s P/L and daily lock so you can test again. History is kept. Disabled on real, so the −$2 daily stop can’t be bypassed.
+**Lifetime loss cap:** Settings → Real money. Off by default. When you turn it on, real mode turns itself off if total real losses reach the amount you set. Lifetime real P/L is on the Stats tab. The daily stop stays under Daily limits.
 
 ## App
 
@@ -35,6 +35,6 @@ A remote control and dashboard for the **ATS bot**, which runs 24/7 on Mohamed's
 - **Alerts:** in-app toasts from the server's event feed.
 - `legacy/` is the old v3 app with the phone mode (the bot running inside the phone).
 
-API: `/api/status`, `/api/stats`, `/api/events`, `/api/real`, `/api/demo/reset`, `/api/day/reset`, `/api/settings`, `/api/bot/start|stop`, `/api/history`.
+API: `/api/status`, `/api/stats`, `/api/events`, `/api/real`, `/api/demo/reset`, `/api/day/reset`, `/api/history/clear`, `/api/settings`, `/api/bot/start|stop`, `/api/history`.
 
 None of this has a tested edge: the backtests lost money over time.

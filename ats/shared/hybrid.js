@@ -54,6 +54,8 @@
     /** Roll to a new Bahrain day if needed (resets day P/L and the chain). Returns true on a roll. */
     roll(t) { const d = dayKey(t); if (d === this.day) return false;
       Object.assign(this, { day: d, dayPnl: 0, dayTrades: 0, dayWins: 0, dayState: 'trading', dayReason: null, phase: 'differs', step: 0, chainLoss: 0 }); return true; }
+    /** Clear today's P/L and unlock the day (demo Reset today). History is not touched. */
+    resetDay(t) { Object.assign(this, { day: dayKey(t || Math.floor(Date.now() / 1000)), dayPnl: 0, dayTrades: 0, dayWins: 0, dayState: 'trading', dayReason: null }); return this; }
     dayCheck() { const p = this.p;
       if (this.dayPnl >= +p.day_tp - 1e-9) { this.dayState = 'locked'; this.dayReason = `Daily +$${(+p.day_tp).toFixed(2)} lock reached`; }
       else if (this.dayPnl <= -p.day_sl + 1e-9) { this.dayState = 'stopped'; this.dayReason = `Daily −$${(+p.day_sl).toFixed(2)} stop reached`; }

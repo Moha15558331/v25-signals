@@ -18,11 +18,13 @@ A remote control and dashboard for the **ATS bot**, which runs 24/7 on Mohamed's
 ## Real money (off by default)
 
 1. Put the real token on the server as `/opt/ats/.secrets/deriv-real.env`, with the line `DERIV_REAL_TOKEN=...` (owner `ats`, mode 600). No restart is needed.
-2. In the app, open Account (top right) → **Real**, type **REAL**, and confirm. The phone also sends its server key.
+2. In the app, open Account (top right) → **Real**, then confirm on the red **Switch to Real money** sheet. The phone also sends its server key. Switching back to Demo is one tap.
 3. **Hard caps:** daily stop of $2 at most, no stake above the stake cap, and a lifetime real-loss cap (default $10, set under Settings → Account). When the cap is hit, real mode turns itself off and the bot stops.
 4. Only the ATS bot runs on real. Switching account requires the bot to be stopped, and it starts a fresh session.
 
 **Reset demo balance:** Account → Reset demo balance. It works on the demo token only.
+
+**Reset today:** Home (next to the Today card) or Settings → Reset today. Demo only: it clears today’s P/L and daily lock so you can test again. History is kept. Disabled on real, so the −$2 daily stop can’t be bypassed.
 
 ## App
 
@@ -33,6 +35,6 @@ A remote control and dashboard for the **ATS bot**, which runs 24/7 on Mohamed's
 - **Alerts:** in-app toasts from the server's event feed.
 - `legacy/` is the old v3 app with the phone mode (the bot running inside the phone).
 
-API: `/api/status`, `/api/stats`, `/api/events`, `/api/real`, `/api/demo/reset`, `/api/settings`, `/api/bot/start|stop`, `/api/history`.
+API: `/api/status`, `/api/stats`, `/api/events`, `/api/real`, `/api/demo/reset`, `/api/day/reset`, `/api/settings`, `/api/bot/start|stop`, `/api/history`.
 
 None of this has a tested edge: the backtests lost money over time.

@@ -33,23 +33,41 @@ function applyTheme() { const p = themePref(); const dark = p === 'dark' || (p =
 function setTheme(p) { try { localStorage.setItem('ats.theme2', p); } catch (e) { } applyTheme(); renderSettings(); }
 mq.addEventListener ? mq.addEventListener('change', applyTheme) : mq.addListener(applyTheme); applyTheme();
 
-/* ---------- toasts ---------- */
+/* ---------- toasts: one at a time, dismissible, no stale pile-up ---------- */
+let lastEv = null, lastToastKey = '', lastToastAt = 0, toastTimer = null;
+function dismissToasts(immediate) {
+  const box = $('toasts'); if (!box) return; clearTimeout(toastTimer); toastTimer = null;
+  [...box.children].forEach(el => {
+    if (immediate) { el.remove(); return; }
+    if (el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 360);
+  });
+}
 function toast(o) { if (typeof o === 'string') o = { level: 'info', title: o };
-  const box = $('toasts'); while (box.children.length >= 3) box.firstChild.remove();
-  const el = document.createElement('div'); el.className = 'toast ' + (o.level || 'info');
-  el.innerHTML = `<span class="ti">${evIcon(o.level)}</span><span class="tt"><b>${esc(o.title)}</b>${o.text ? `<small>${esc(o.text)}</small>` : ''}</span>${o.t ? `<time>${fmtT(o.t).slice(0, 5)}</time>` : ''}`;
-  const kill = () => { if (el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 360); };
-  el.onclick = kill; let y0 = null; el.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true }); el.addEventListener('touchmove', e => { if (y0 != null && e.touches[0].clientY - y0 < -12) kill(); }, { passive: true });
-  box.appendChild(el); setTimeout(kill, o.ms || (o.level === 'error' ? 6500 : 4200));
+  const box = $('toasts'); if (!box) return;
+  const key = (o.level || 'info') + '|' + (o.title || '') + '|' + (o.text || '');
+  if (key === lastToastKey && Date.now() - lastToastAt < 1600) return; // de-dupe
+  lastToastKey = key; lastToastAt = Date.now();
+  dismissToasts(true);
+  const el = document.createElement('div'); el.className = 'toast ' + (o.level || 'info'); el.setAttribute('role', 'status');
+  el.innerHTML = `<span class="ti">${evIcon(o.level)}</span><span class="tt"><b>${esc(o.title)}</b>${o.text ? `<small>${esc(o.text)}</small>` : ''}</span>${o.t ? `<time>${fmtT(o.t).slice(0, 5)}</time>` : ''}<button type="button" class="toast-x" aria-label="Dismiss">${I.x}</button>`;
+  const kill = ev => { if (ev) ev.stopPropagation(); if (el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), 360); };
+  el.onclick = kill; el.querySelector('.toast-x').onclick = kill;
+  let y0 = null; el.addEventListener('touchstart', e => { y0 = e.touches[0].clientY; }, { passive: true }); el.addEventListener('touchmove', e => { if (y0 != null && e.touches[0].clientY - y0 < -12) kill(); }, { passive: true });
+  box.appendChild(el); toastTimer = setTimeout(kill, o.ms || (o.level === 'error' ? 6500 : 4200));
   if (navigator.vibrate && (o.level === 'error' || o.level === 'lock')) try { navigator.vibrate(30); } catch (e) { } }
 const errToast = e => toast({ level: 'error', title: 'Couldn’t do that', text: (e && e.message) || String(e) });
-let lastEv = null;
+function catchUpEvents(st) { const evs = (st && st.events) || []; if (evs.length) lastEv = evs[evs.length - 1].id; }
 function pumpEvents(st) { const evs = (st && st.events) || []; const top = evs.length ? evs[evs.length - 1].id : 0;
   if (lastEv == null) { lastEv = top; return; }
-  for (const e of evs) if (e.id > lastEv && !e.quiet) toast(e); if (top > lastEv) lastEv = top; }
+  const fresh = evs.filter(e => e.id > lastEv && !e.quiet);
+  if (top > lastEv) lastEv = top;
+  if (!fresh.length) return;
+  // One toast for the batch: prefer an error/lock, otherwise the latest event.
+  const ev = [...fresh].reverse().find(e => e.level === 'error' || e.level === 'lock' || e.level === 'warn') || fresh[fresh.length - 1];
+  toast(ev); }
 
 /* ---------- sheets ---------- */
-function sheet(html, onMount) { const w = $('sheetWrap'), s = $('sheet'); s.innerHTML = html; w.hidden = false; $('sheetBg').onclick = closeSheet; if (onMount) onMount(s); }
+function sheet(html, onMount) { dismissToasts(true); const w = $('sheetWrap'), s = $('sheet'); s.innerHTML = html; w.hidden = false; $('sheetBg').onclick = closeSheet; if (onMount) onMount(s); }
 function closeSheet() { $('sheetWrap').hidden = true; $('sheet').innerHTML = ''; }
 function ask({ title, text, ok = 'Continue', danger, html }) { return new Promise(res => {
   sheet(`<h2>${esc(title)}</h2>${text ? `<p>${esc(text)}</p>` : ''}${html || ''}<div class="btns"><button type="button" class="btn ${danger ? 'real' : 'primary'} block" id="askOk">${esc(ok)}</button><button type="button" class="btn ghost block" id="askNo">Cancel</button></div>`, s => {
@@ -85,6 +103,7 @@ function renderHome() {
   $('daySub').textContent = `${d.trades} trade${d.trades === 1 ? '' : 's'} · new day at 00:00 Bahrain`;
   const chip = $('dayChip'); const ds = d.state; chip.className = 'chip ' + (ds === 'locked' ? 'ok' : ds === 'stopped' ? 'bad' : on ? 'acc' : '');
   chip.textContent = ds === 'locked' ? 'Goal locked' : ds === 'stopped' ? 'Day stopped' : on ? 'Trading' : b.state === 'halted' ? 'Halted' : 'Idle';
+  const rt = $('resetTodayBtn'); if (rt) { rt.hidden = false; rt.disabled = isReal(st); rt.title = isReal(st) ? 'Disabled on real — the daily stop can’t be bypassed' : 'Clear today’s P/L and unlock trading'; }
   const stop = +d.stop || 2, lock = +d.lock || 1, z = stop / (stop + lock) * 100;
   document.querySelector('.pbar-neg').style.flex = stop; document.querySelector('.pbar-pos').style.flex = lock;
   document.querySelector('.pbar-zero').style.left = `calc(${z}% - 1px)`; document.querySelector('.pbar-lbl span:nth-child(2)').style.left = z + '%';
@@ -210,6 +229,7 @@ function renderSettings() {
   <div class="group"><div class="group-t">Account</div><div class="list">
     <div class="item"><span class="ic ${isReal(st) ? 'c4' : 'c1'}">${I.wallet}</span><div class="lab"><b>${isReal(st) ? 'Real account' : 'Demo account'}</b><small>${esc(st.account.prefix || '')} · balance ${st.account.balance == null ? '—' : money(st.account.balance)}</small></div><button type="button" class="link" id="openAcct">Switch</button></div>
     <div class="item"><span class="ic c6">${I.refresh}</span><div class="lab"><b>Reset demo balance</b><small>Back to the default demo balance</small></div><button type="button" class="link" id="resetDemo">Reset</button></div>
+    <div class="item"><span class="ic c3">${I.refresh}</span><div class="lab"><b>Reset today</b><small>${isReal(st) ? 'Disabled on real — the daily stop can’t be bypassed' : 'Clear today’s P/L and unlock trading. History is kept.'}</small></div><button type="button" class="link" id="resetTodaySet"${isReal(st) ? ' disabled' : ''}>Reset</button></div>
     <div class="item"><span class="ic c4">${I.alert}</span><div class="lab"><b>Lifetime real-loss cap</b><small>${real.available ? `${money(real.lifetime_lost)} lost so far · ${money(real.room_left)} left` : 'Real mode needs a real token on the server'}</small></div><span class="unit">$</span><input type="number" inputmode="decimal" step="1" id="capIn" value="${real.lifetime_cap}"></div></div></div>
   <div class="group"><div class="group-t">Appearance</div><div class="seg" id="themeSeg" style="margin:0">${['auto', 'light', 'dark'].map(t => `<button type="button" data-t="${t}" class="${pref === t ? 'on' : ''}">${t === 'auto' ? 'Automatic' : t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></div>
   <div class="group"><div class="group-t">Server</div><div class="list">
@@ -227,6 +247,7 @@ function renderSettings() {
   if (q('discard')) q('discard').onclick = () => { dirty = false; renderSettings(); };
   q('newSess').onclick = async () => { if (await ask({ title: 'Start a new session?', text: 'Session P/L goes back to $0. History and daily limits stay.', ok: 'New session' })) R.newSession().then(() => toast({ level: 'info', title: 'New session started' }), errToast); };
   q('openAcct').onclick = openAccount; q('resetDemo').onclick = resetDemo;
+  if (q('resetTodaySet')) q('resetTodaySet').onclick = resetToday;
   q('capIn').onchange = async () => { const v = +q('capIn').value; if (!(v > 0)) return; const up = v > real.lifetime_cap;
     if (up && !(await ask({ title: 'Raise the lifetime cap?', text: `Real mode will allow up to ${money(v)} of total real losses.`, ok: 'Raise cap', danger: true }))) { renderSettings(); return; }
     R.realCap(v, up).then(() => toast({ level: 'info', title: 'Lifetime cap set', text: money(v) }), errToast); };
@@ -234,31 +255,40 @@ function renderSettings() {
 }
 function markDirty() { if (!dirty) { dirty = true; const keep = document.activeElement && document.activeElement.dataset; const k = keep && (keep.k || keep.g); renderSettings(); if (k) { const i = document.querySelector(`[data-k="${k}"],[data-g="${k}"]`); if (i) { i.focus(); try { const l = i.value.length; i.setSelectionRange(l, l); } catch (e) { } } } } }
 
-/* ---------- account sheet: Demo / Real, reset demo ---------- */
+/* ---------- account sheet: Demo / Real, reset demo, reset today ---------- */
 function openAccount() { const st = R.st; if (!st) return; const real = st.real, a = st.account, rl = isReal(st);
-  sheet(`<span class="eyebrow">${rl ? 'Real account' : 'Demo account'} · server</span><div class="bal">${a.balance == null ? '—' : money(a.balance)}</div><p class="muted" style="margin:0">${esc(a.prefix || '')}${a.verified ? ' · verified' : ''}${a.error ? ' · ' + esc(a.error) : ''}</p>
-    <div class="seg acct" style="margin-top:18px"><button type="button" data-m="demo" class="${rl ? '' : 'on'}">Demo</button><button type="button" data-m="real" class="${rl ? 'on real' : ''}">Real</button></div>
+  const err = a.error && !a.verified ? a.error : '';
+  sheet(`<span class="eyebrow">${rl ? 'Real account' : 'Demo account'} · server</span><div class="bal">${a.balance == null ? '—' : money(a.balance)}</div><p class="muted" style="margin:0">${esc(a.prefix || '')}${a.verified ? ' · verified' : ''}</p>
+    <div class="seg acct" style="margin-top:18px"><button type="button" data-m="demo" class="${rl ? '' : 'on'}">Demo</button><button type="button" data-m="real" class="${rl ? 'on real' : ''}"${!real.available && !rl ? ' disabled' : ''}>Real</button></div>
     ${!real.available ? `<div class="notice bad">${I.alert}<span>${esc(real.reason)}</span></div>` : ''}
+    ${err ? `<div class="notice bad">${I.alert}<span>${esc(err)}</span></div>` : ''}
     ${real.disabled_reason && !rl ? `<p class="note" style="margin:0">Real mode last switched off: ${esc(real.disabled_reason)}</p>` : ''}
     <div class="kv"><span>Lifetime real P/L</span><b class="${cls(real.lifetime_pnl)}">${money(real.lifetime_pnl, true)}</b></div>
     <div class="kv"><span>Lifetime loss cap</span><b>${money(real.lifetime_cap)} · ${money(real.room_left)} left</b></div>
-    <div class="btns"><button type="button" class="btn block" id="shReset">${I.refresh} Reset demo balance</button><button type="button" class="btn ghost block" id="shClose">Done</button></div>`, s => {
-    s.querySelector('#shClose').onclick = closeSheet; s.querySelector('#shReset').onclick = () => { closeSheet(); resetDemo(); };
-    s.querySelectorAll('.seg.acct button').forEach(b => b.onclick = () => { const m = b.dataset.m; if ((m === 'real') === rl) return; closeSheet(); m === 'real' ? enableReal() : disableReal(); }); }); }
+    <div class="btns">${rl ? '' : `<button type="button" class="btn block" id="shDay">${I.refresh} Reset today</button>`}<button type="button" class="btn ${rl ? 'block' : 'ghost block'}" id="shReset">${I.refresh} Reset demo balance</button><button type="button" class="btn ghost block" id="shClose">Done</button></div>`, s => {
+    s.querySelector('#shClose').onclick = closeSheet;
+    s.querySelector('#shReset').onclick = () => { closeSheet(); resetDemo(); };
+    const dayBtn = s.querySelector('#shDay'); if (dayBtn) dayBtn.onclick = () => { closeSheet(); resetToday(); };
+    s.querySelectorAll('.seg.acct button').forEach(b => b.onclick = () => { if (b.disabled) return; const m = b.dataset.m; if ((m === 'real') === rl) return; if (m === 'real') enableReal(); else { closeSheet(); disableReal(); } }); }); }
 $('acctPill').onclick = () => { if (!R.st) { if (!R.hasKey()) go('home'); return; } openAccount(); };
 async function enableReal() { const st = R.st, real = st.real;
-  if (!real.available) { toast({ level: 'error', title: 'Real mode isn’t available', text: real.reason }); return; }
-  if (st.bot.running || st.bot.open) { toast({ level: 'warn', title: 'Stop the bot first', text: 'Switch accounts only while the bot is stopped.' }); return; }
-  sheet(`<h2 style="color:var(--red)">Switch to REAL money</h2><p>The server bot will trade your real Deriv balance. These caps always apply:</p>
+  if (!real.available) { sheet(`<h2>Real mode isn’t available</h2><p>${esc(real.reason)}</p><div class="btns"><button type="button" class="btn ghost block" id="realNo">OK</button></div>`, s => { s.querySelector('#realNo').onclick = closeSheet; }); return; }
+  if (st.bot.running || st.bot.open) { sheet(`<h2>Stop the bot first</h2><p>Switch accounts only while the bot is stopped and the last contract has settled.</p><div class="btns"><button type="button" class="btn ghost block" id="realNo">OK</button></div>`, s => { s.querySelector('#realNo').onclick = closeSheet; }); return; }
+  sheet(`<h2 style="color:var(--red)">Switch to Real money</h2><p>The server bot will trade your real Deriv balance. These caps always apply:</p>
     <ul class="warn-list"><li>${I.shield}Daily stop at most −$2 (Bahrain day)</li><li>${I.shield}No stake above the $${(+st.bot.params.max_stake).toFixed(2)} cap</li><li>${I.shield}Real mode turns itself off after ${money(real.lifetime_cap)} total real loss</li><li>${I.alert}Only the ATS bot runs on real. Backtests lost money over time.</li></ul>
-    <p class="muted" style="font-size:13px">Type <b>REAL</b> to confirm. This phone also sends its server key.</p><input class="field" id="realIn" autocomplete="off" autocapitalize="characters" placeholder="REAL" style="text-align:center">
-    <div class="btns"><button type="button" class="btn real block" id="realGo" disabled>Switch to real</button><button type="button" class="btn ghost block" id="realNo">Stay on demo</button></div>`, s => {
-    const inp = s.querySelector('#realIn'), go = s.querySelector('#realGo'); inp.oninput = () => { go.disabled = inp.value.trim().toUpperCase() !== 'REAL'; };
+    <p class="warn-line">Real trades can lose money. The bot stays stopped until you press Start.</p>
+    <div class="btns"><button type="button" class="btn real block" id="realGo">Switch to Real money</button><button type="button" class="btn ghost block" id="realNo">Stay on demo</button></div>`, s => {
     s.querySelector('#realNo').onclick = closeSheet;
-    go.onclick = async () => { go.disabled = true; try { await R.realOn(); closeSheet(); toast({ level: 'warn', title: 'Real money mode on', text: 'Press Start when you are ready. Caps are active.' }); } catch (e) { go.disabled = false; errToast(e); } }; }); }
-async function disableReal() { try { await R.realOff(); toast({ level: 'info', title: 'Back on demo' }); } catch (e) { errToast(e); } }
+    const go = s.querySelector('#realGo');
+    go.onclick = async () => { go.disabled = true; try { await R.realOn(); catchUpEvents(R.st); closeSheet(); toast({ level: 'warn', title: 'Real money mode on', text: 'Press Start when you are ready. Caps are active.' }); } catch (e) { go.disabled = false; errToast(e); } }; }); }
+async function disableReal() { try { await R.realOff(); catchUpEvents(R.st); toast({ level: 'info', title: 'Back on demo' }); } catch (e) { errToast(e); } }
 async function resetDemo() { if (!(await ask({ title: 'Reset demo balance?', text: 'Your Deriv demo account goes back to its default balance. Real money is never touched.', ok: 'Reset demo balance' }))) return;
-  try { const d = await R.resetDemo(); toast({ level: 'win', title: 'Demo balance reset', text: d.balance != null ? `New balance ${money(d.balance)}` : 'Done' }); } catch (e) { errToast(e); } }
+  try { const d = await R.resetDemo(); catchUpEvents(R.st); toast({ level: 'win', title: 'Demo balance reset', text: d.balance != null ? `New balance ${money(d.balance)}` : 'Done' }); } catch (e) { errToast(e); } }
+async function resetToday() { const st = R.st; if (!st) return;
+  if (isReal(st)) { sheet(`<h2>Can’t reset today on real</h2><p>The real −$2 daily stop can’t be bypassed. Switch back to demo first.</p><div class="btns"><button type="button" class="btn ghost block" id="ok">OK</button></div>`, s => { s.querySelector('#ok').onclick = closeSheet; }); return; }
+  if (!(await ask({ title: 'Reset today?', text: 'Today’s P/L and daily lock go back to $0. Trade history is kept, and you can start testing again right away.', ok: 'Reset today' }))) return;
+  try { await R.resetToday(); catchUpEvents(R.st); toast({ level: 'info', title: 'Today reset', text: 'Daily P/L cleared · history kept' }); } catch (e) { errToast(e); } }
+if ($('resetTodayBtn')) $('resetTodayBtn').onclick = resetToday;
 
 /* ---------- pairing ---------- */
 $('pairBtn').onclick = async () => { const k = ($('pairInput').value || '').trim(); $('pairErr').textContent = '';

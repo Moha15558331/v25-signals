@@ -45,10 +45,11 @@ const R = {
   saveParams(params) { return this.act('PUT', '/api/settings', { params }); },
   saveGlobal(g) { return this.act('PUT', '/api/settings', { global: g }); },
   newSession() { return this.act('POST', '/api/session/new'); },
-  realOn() { return this.act('POST', '/api/real', { enable: true, confirm: 'REAL', key: get(LS.key) }); },
+  realOn() { return this.act('POST', '/api/real', { enable: true, confirm: true, key: get(LS.key) }); },
   realOff() { return this.act('POST', '/api/real', { enable: false }); },
-  realCap(cap, confirm) { return this.act('POST', '/api/real', { lifetime_cap: cap, confirm: confirm ? 'REAL' : undefined }); },
+  realCap(cap, confirm) { return this.act('POST', '/api/real', { lifetime_cap: cap, confirm: confirm ? true : undefined }); },
   resetDemo() { return this.act('POST', '/api/demo/reset'); },
+  resetToday() { return this.act('POST', '/api/day/reset'); },
 };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) R.kick(); });
 window.ATSRemote = R;

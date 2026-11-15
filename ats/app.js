@@ -31,9 +31,33 @@ setTheme(localStorage.getItem('ats.theme') || 'dark');
 const WALLET_SVG = '<svg class="wallet-svg" viewBox="0 0 24 24"><path d="M21 12V7a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-5z"/><path d="M16 12h.01"/></svg>';
 function setWalletStatus(msg, type) { const el = $('wStatus'); el.textContent = msg || ''; el.className = 'wallet-status' + (type ? ' ' + type : ''); }
 function openWallet() { const d = $('walletDrop'); d.hidden = false; d.classList.add('open'); renderWallet();
+  const R = window.ATSRemote; if (R && R.mode() === 'server') { if (!R.hasKey()) setTimeout(() => $('wSrvKey').focus(), 50); else R.refresh(); return; }
   if (!DA.snapshot().hasToken) setTimeout(() => $('wTokenInput').focus(), 50); else DA.loadAccounts().then(renderWallet); }
 function closeWallet() { const d = $('walletDrop'); d.classList.remove('open'); d.hidden = true; }
+function renderServerWallet(R) {
+  const pill = $('walletPill'), drop = $('walletDrop'), isOpen = drop.classList.contains('open');
+  drop.className = 'wallet-drop' + (isOpen ? ' open' : '') + ' demo'; drop.hidden = !isOpen;
+  $('realBanner').hidden = true;
+  const st = R.st, acct = st && st.account, has = R.hasKey();
+  $('wSrvKeyBox').hidden = has; $('wSrvInfo').hidden = !has;
+  if (has && acct && acct.balance != null) {
+    const bal = Number(acct.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }), cur = acct.currency || 'USD';
+    pill.className = 'wallet-pill demo server';
+    pill.innerHTML = `<span class="wallet-icon-box">${WALLET_SVG}</span><span class="wallet-text"><span class="wallet-bal">${bal}</span><span class="wallet-mode">demo · server</span></span>`;
+    $('wSrvBal').innerHTML = bal + '<span style="font-size:1.6rem;font-weight:800"> ' + cur + '</span>';
+    $('wSrvId').textContent = (acct.prefix ? 'Demo ID: ' + acct.prefix + ' · ' : '') + R.url().replace('https://', '');
+  } else { pill.className = 'wallet-pill connect'; pill.innerHTML = `<span>${has ? 'Server…' : 'Connect'}</span>`; $('wSrvBal').textContent = '—'; $('wSrvId').textContent = R.url().replace('https://', ''); }
+  if (!has) setWalletStatus('');
+  else if (R.err) setWalletStatus(R.err, 'err');
+  else if (!st) setWalletStatus('Connecting to your server…');
+  else if (acct && acct.error && !acct.verified) setWalletStatus('Server can’t reach Deriv: ' + acct.error, 'err');
+  else setWalletStatus('Connected to your server · demo verified', 'ok');
+}
 function renderWallet() {
+  const R = window.ATSRemote, srv = !!(R && R.mode() === 'server');
+  $('wRunServer').classList.toggle('active', srv); $('wRunPhone').classList.toggle('active', !srv);
+  $('wServerSection').hidden = !srv; $('wPhoneSection').hidden = srv;
+  if (srv) { renderServerWallet(R); if (window.ATS) window.ATS.render(); return; }
   const s = DA.snapshot(), pill = $('walletPill'), drop = $('walletDrop');
   $('realBanner').hidden = !(s.connected && s.mode === 'real');
   const isOpen = drop.classList.contains('open');
@@ -78,6 +102,20 @@ $('wResetBtn').onclick = async e => { e.preventDefault(); e.stopPropagation(); c
   try { await DA.resetDemoBalance(); setWalletStatus('Demo balance reset to default', 'ok'); toast('Demo balance reset'); }
   catch (err) { setWalletStatus('Reset failed: ' + (err.message || err), 'err'); }
   finally { btn.dataset.busy = '0'; renderWallet(); } };
+// ---------- run location: server (24/7) or this phone ----------
+$('wRunServer').onclick = () => { const R = window.ATSRemote; if (!R || R.mode() === 'server') return;
+  if (running()) { toast('Stop the bot on this phone first'); return; } R.setMode('server'); renderWallet(); if (!R.hasKey()) setTimeout(() => $('wSrvKey').focus(), 50); };
+$('wRunPhone').onclick = () => { const R = window.ATSRemote; if (!R || R.mode() === 'local') return;
+  if (R.st && (R.st.bot.running || R.st.bot.open) && !confirm('The server bot keeps running on its own. Switch this app to the phone bot anyway? (You can switch back any time.)')) return;
+  R.setMode('local'); renderWallet(); };
+$('wSrvSave').onclick = async e => { e.stopPropagation(); const R = window.ATSRemote; const k = ($('wSrvKey').value || '').trim();
+  if (k.length < 32) { setWalletStatus('That key looks too short — paste the whole key', 'err'); return; }
+  R.setKey(k); $('wSrvKey').value = ''; setWalletStatus('Checking the key…');
+  try { await R.api('GET', '/api/status'); toast('Server connected. The bot now runs 24/7 on your server.'); await R.refresh(true); R.kick(); }
+  catch (err) { R.forget(); R.setMode('server'); setWalletStatus(err.status === 401 ? 'Wrong key — check it and paste again' : err.message, 'err'); }
+  renderWallet(); };
+$('wSrvKey').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); $('wSrvSave').click(); } });
+$('wSrvForget').onclick = () => { const R = window.ATSRemote; if (!confirm('Remove the server key from this phone? The server bot is not stopped by this.')) return; R.forget(); R.setMode('server'); renderWallet(); toast('Server key removed from this phone'); };
 async function bootWallet() { renderWallet(); await DA.boot(); renderWallet();
   setInterval(() => { if (DA.snapshot().hasToken) DA.loadAccounts().then(renderWallet); }, 20000); }
 

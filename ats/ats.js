@@ -33,6 +33,11 @@ const anyRunning = () => !!(BOT.running || BOT.open);
 const runningBots = () => anyRunning() ? [BOT] : [];
 let view = 'bots', openBot = null, histMode = 'current';
 const rfRows = rows => rows.filter(h => h.bot === KEY);
+/* Server mode: the bot runs on the server; this app shows its state and sends commands (remote.js). */
+const RM = () => window.ATSRemote;
+const RON = () => !!(window.ATSRemote && window.ATSRemote.on());
+const RSRV = () => !!(window.ATSRemote && window.ATSRemote.mode() === 'server');
+const rErr = e => toast(errText(e));
 
 /* ---------------- trade connection (one per account mode) ---------------- */
 const CONNS = {};
@@ -231,6 +236,9 @@ async function sleepWhile(bot, ms) { const end = Date.now() + ms; while (bot.run
 function haltBot(bot, reason) { bot.running = false; bot.status = 'halted'; bot.msg = 'Stopped: ' + reason; bot.haltReason = reason; render(); toast(`Rise/Fall stopped: ${reason}`); }
 
 async function startBot() {
+  if (RON()) { const r = RM(); if (!r.st) { setFormErr('Still connecting to your server…'); return; }
+    const errs = E.validateParams(r.draft || {}); if (errs.length) { setFormErr(errs.join(' · ')); return; }
+    setFormErr(''); try { await r.start(); toast('Rise/Fall bot started on your server (demo)'); } catch (e) { setFormErr(errText(e)); } return; }
   const bot = BOT; if (bot.running) return;
   if (bot.open) { toast('Wait for the last contract to settle first'); return; }
   const s = DA.snapshot();
@@ -248,12 +256,13 @@ async function startBot() {
   bot.run = new E.BotRun(p); bot.mode = mode; bot.running = true; bot.status = 'running'; bot.haltReason = null; bot.alt = null; bot.startedAt = now(); bot.msg = 'Starting…'; render();
   botLoop(bot);
 }
-function stopBot(why) { const bot = BOT; if (!bot.running && !bot.open) return; bot.running = false; bot.status = 'stopped';
+function stopBot(why) { if (RON()) { RM().stop().then(() => toast('Server bot stopping'), rErr); return; } const bot = BOT; if (!bot.running && !bot.open) return; bot.running = false; bot.status = 'stopped';
   bot.msg = bot.open ? `Stopping — waiting for #${bot.open.contract_id} to settle` : 'Stopped' + (why ? ': ' + why : ''); render(); }
-function stopAll(why) { const was = anyRunning(); stopBot(why); if (why) toast('Bot stopped: ' + why); else if (was) toast('Rise/Fall bot stopped'); render(); }
+function stopAll(why) { if (RON()) { RM().stopAll().then(() => toast('Stop all sent to the server'), rErr); return; } const was = anyRunning(); stopBot(why); if (why) toast('Bot stopped: ' + why); else if (was) toast('Rise/Fall bot stopped'); render(); }
 
 // Orphaned open contracts (page reloaded mid-trade): settle them from the account.
 async function reconcileOrphans() {
+  if (RON()) return;
   const orphans = HIST.filter(h => h.status === 'open' && !(BOT.open && BOT.open.contract_id === h.contract_id));
   for (const h of orphans) {
     if (!DA.state.accounts[h.mode]) continue;
@@ -272,8 +281,34 @@ function accountName() {
   return 'Trader';
 }
 const botState = b => (b.running || b.open) ? (b.running ? 'Running' : 'Stopping') : b.status === 'halted' ? 'Halted' : 'Idle';
-function render() { if (!$('tab-ats')) return; renderDash(); if (view === 'bots') renderBots(); else renderHistory(); if (openBot) renderBotLive(); }
+function render() { if (!$('tab-ats')) return; const srv = RSRV();
+  $('atsFineServer').hidden = !srv; $('atsFineLocal').hidden = srv; $('atsNewSession').style.display = srv ? '' : 'none'; $('atsHistMode').style.display = srv ? 'none' : '';
+  renderDash(); if (view === 'bots') renderBots(); else renderHistory(); if (openBot) renderBotLive(); }
+function renderDashRemote() {
+  const r = RM(), st = r.st;
+  $('atsName').textContent = accountName(); $('atsReal').hidden = true;
+  const badge = $('atsMode'); badge.className = 'ats-mode ' + (st ? 'server' : 'off'); badge.innerHTML = st ? '● DEMO · SERVER' : r.err || !r.hasKey() ? 'OFFLINE' : 'CONNECTING';
+  if (!st) { $('atsPnl').textContent = '$0.00'; $('atsPnl').className = 'ats-big'; $('atsSince').textContent = ''; $('atsBal').textContent = '—';
+    $('atsTrades').textContent = '0'; $('atsWin').textContent = '—'; $('atsOpen').textContent = '0';
+    $('atsStatus').innerHTML = `<i class="pulse off"></i><span>${!r.hasKey() ? 'Tap <b>Connect</b> (top right) and paste your server key once' : r.err ? 'Server: ' + esc(r.err) : 'Connecting to your server…'}</span>`;
+    $('atsStopAll').disabled = true; $('atsLimits').textContent = 'ATS limits: loading…'; return; }
+  const se = st.session, b = st.bot, live = b.live && b.open ? +b.live.profit || 0 : 0;
+  const el = $('atsPnl'); el.textContent = money(se.pnl, true); el.className = 'ats-big ' + (se.pnl > 0 ? 'up' : se.pnl < 0 ? 'dn' : '');
+  $('atsSince').textContent = `since ${bhStamp(se.start)} Bahrain` + (live ? ` · open ${money(live, true)}` : '');
+  const bal = st.account && st.account.balance; $('atsBal').textContent = bal == null ? '—' : '$' + Number(bal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  $('atsTrades').textContent = se.trades; $('atsWin').textContent = pct(se.winrate); $('atsOpen').textContent = se.open;
+  const on = b.running || b.open, la = st.last_analysis;
+  const stake = on && b.next_stake != null ? `Next stake $${(+b.next_stake).toFixed(2)}${b.step ? ' · martingale step ' + b.step : ' · base stake'}` : '';
+  const an = la ? `Last analysis: ${la.dir ? (la.dir === 'up' ? 'Rise' : 'Fall') + ' ' + la.conf + '%' : 'neutral'} on ${esc(la.tf)} candles · ${bhTime(la.at)}` : '';
+  const ago = Math.round((Date.now() - r.lastOk) / 1000);
+  const line = r.err ? `<div class="srv-line err"><i class="dot"></i>Server unreachable: ${esc(r.err)}</div>` : `<div class="srv-line"><i class="dot"></i>Running on your server 24/7 · updated ${ago < 2 ? 'just now' : ago + 's ago'}</div>`;
+  $('atsStatus').innerHTML = on ? `<i class="pulse"></i><span><b>Rise/Fall ${b.running ? 'running' : 'stopping'}</b> · V25 (1s) · ${esc(b.cycle)} · DEMO<br><small class="muted">${esc(b.msg || '')}</small>${stake ? `<br><small class="muted">${esc(stake)}</small>` : ''}${an ? `<br><small class="muted">${an}</small>` : ''}${line}</span>`
+    : `<i class="pulse off"></i><span>${b.state === 'halted' ? 'Bot stopped: ' + esc(b.halt_reason || '') : 'No bot running on the server'}${an ? `<br><small class="muted">${an}</small>` : ''}${line}</span>`;
+  $('atsStopAll').disabled = !on || r.busy;
+  $('atsLimits').textContent = `ATS limits for this session: stop at −$${(+st.global.sl).toFixed(2)} or +$${(+st.global.tp).toFixed(2)}`;
+}
 function renderDash() {
+  if (RSRV()) return renderDashRemote();
   const s = DA.snapshot(); const mode = s.mode;
   $('atsName').textContent = accountName();
   const badge = $('atsMode'); badge.className = 'ats-mode ' + (s.connected ? mode : 'off'); badge.innerHTML = s.connected ? (mode === 'real' ? '● REAL' : '● DEMO') : 'OFFLINE';
@@ -291,27 +326,30 @@ function renderDash() {
   $('atsLimits').textContent = `ATS limits for this session: stop at −$${(+GLOBAL.sl).toFixed(2)} or +$${(+GLOBAL.tp).toFixed(2)}`;
 }
 function renderBots() {
-  const s = DA.snapshot(); const st = E.statsOf(rfRows(sessionRows(s.mode))); const p = PARAMS[KEY], b = BOT;
-  const on = b.running || b.open, state = botState(b);
+  let st, p, on, state;
+  if (RON()) { const r = RM(), x = r.st; p = r.draft || (x && x.bot.params) || PARAMS[KEY]; st = x ? x.session : { trades: 0, pnl: 0 };
+    on = !!(x && (x.bot.running || x.bot.open)); state = !x ? 'Idle' : { running: 'Running', stopping: 'Stopping', halted: 'Halted' }[x.bot.state] || 'Idle'; }
+  else { const s = DA.snapshot(), b = BOT; st = E.statsOf(rfRows(sessionRows(s.mode))); p = PARAMS[KEY]; on = b.running || b.open; state = botState(b); }
   const dir = { analysis: 'Analysis', up: 'Always Rise', down: 'Always Fall', alternate: 'Alternate' }[p.direction];
   $('atsBots').innerHTML = `<button type="button" class="bot-card wide rf${on ? ' on' : ''}" data-bot="${KEY}"><span class="bot-icon">${ICON}</span><span class="bot-state ${state.toLowerCase()}">${state}</span>
       <span class="bot-name">Rise / Fall · Volatility 25 (1s)</span><span class="bot-desc">${esc(T.desc)}</span>
       <span class="bot-foot"><span>${esc(E.cycleLabel(p))} cycle · ${dir} · $${(+p.stake).toFixed(2)}${p.martingale ? ` · MG ×${p.mg_factor}` : ''}</span><b class="${st.pnl > 0 ? 'up' : st.pnl < 0 ? 'dn' : ''}">${st.trades ? money(st.pnl, true) : 'Open settings ›'}</b></span></button>`;
   $('atsBots').querySelectorAll('.bot-card').forEach(el => el.onclick = () => openBotView(KEY));
 }
-function histRows() { const m = histMode === 'current' ? DA.state.mode : histMode; return rfRows(HIST).filter(h => histMode === 'all' || h.mode === m); }
+function histRows() { if (RON()) { const h = RM().hist; return h ? rfRows(h.rows) : []; } const m = histMode === 'current' ? DA.state.mode : histMode; return rfRows(HIST).filter(h => histMode === 'all' || h.mode === m); }
 function renderHistory() {
   const rows = histRows(); const a = E.statsOf(rows);
   $('atsHistMode').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.m === histMode));
   $('atsHistAll').innerHTML = `<div><span class="eyebrow">Trades</span><b>${a.trades}</b></div><div><span class="eyebrow">Win rate</span><b>${pct(a.winrate)}</b></div><div><span class="eyebrow">P&amp;L</span><b class="${a.pnl > 0 ? 'up' : a.pnl < 0 ? 'dn' : ''}">${money(a.pnl, true)}</b></div>`;
-  const groups = [['Rise (CALL)', rows.filter(h => h.contract_type === 'CALL')], ['Fall (PUT)', rows.filter(h => h.contract_type === 'PUT')], ['This session', rows.filter(h => h.session === SESSION.id)]];
+  const sid = RON() ? (RM().st ? RM().st.session.id : null) : SESSION.id;
+  const groups = [['Rise (CALL)', rows.filter(h => h.contract_type === 'CALL')], ['Fall (PUT)', rows.filter(h => h.contract_type === 'PUT')], ['This session', rows.filter(h => h.session === sid)]];
   $('atsHistBots').innerHTML = groups.map(([n, r]) => { const s = E.statsOf(r);
     return `<div class="srow"><div>${esc(n)}<div class="n">${s.trades} trade${s.trades === 1 ? "" : "s"} · ${s.wins}–${s.losses}${s.open ? ' · ' + s.open + ' open' : ''}</div></div><span class="tag">${pct(s.winrate)}</span><b class="${s.pnl > 0 ? 'win' : s.pnl < 0 ? 'loss' : ''}">${money(s.pnl, true)}</b></div>`; }).join('');
   const list = rows.slice().reverse().slice(0, 150);
   $('atsHistList').innerHTML = list.length ? list.map(h => `<li><div><b>${esc(sideName(h.contract_type))}</b> · V25 (1s) · ${esc(h.cycle || h.duration || '')}${h.mode === 'real' ? ' <span class="real-tag">REAL</span>' : ''}${h.recovered ? ' <span class="real-tag">RECOVERED</span>' : ''}
       <small>${bhStamp(h.t)} · #${esc(h.contract_id)} · stake $${(+h.stake).toFixed(2)}${h.step ? ' · MG step ' + h.step : ''}</small></div>
       <b class="${h.status === 'settled' ? (h.profit > 0 ? 'up' : 'dn') : 'muted'}">${h.status === 'settled' ? (h.profit > 0 ? 'Won ' : 'Lost ') + money(h.profit, true) : h.status === 'open' ? 'Open' : esc(h.status)}</b></li>`).join('')
-    : '<li class="muted sm">No trades yet. Start the Rise/Fall bot from the Bots tab.</li>';
+    : (RON() && !RM().hist ? '<li class="muted sm">Loading history from your server…</li>' : '<li class="muted sm">No trades yet. Start the Rise/Fall bot from the Bots tab.</li>');
 }
 function setView(v) { view = v; $('atsSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); $('atsBots').hidden = v !== 'bots'; $('atsHistory').hidden = v !== 'history'; render(); }
 
@@ -330,7 +368,9 @@ function cycleHint(p) {
   return `Contract: ${d.duration}${d.duration_unit === 'h' ? 'h' : 'm'}${p.align ? ', opening at each candle and closing at the next' : ''}. Analysis reads ${E.gLabel(tf['1h'])} candles, with ${E.gLabel(tf['4h'])} and ${E.gLabel(tf['1d'])} as higher timeframes.`;
 }
 function renderBotView() {
-  const p = PARAMS[KEY];
+  if (RON() && !RM().draft) { $('atsBotView').innerHTML = `<div class="bv-head"><button type="button" class="icon-btn" id="bvBack" aria-label="Back"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button><div class="bv-title"><h2>Rise / Fall bot</h2><div class="muted sm">Loading settings from your server…</div></div></div>`;
+    $('bvBack').onclick = closeBotView; RM().refresh().then(() => { if (openBot && RM().draft) renderBotView(); }); return; }
+  const p = RON() ? RM().draft : PARAMS[KEY];
   const lad = E.stakeLadder(p);
   const ladder = lad.map(x => `<span class="${x.over ? 'over' : ''}" title="raw $${x.raw}">$${x.stake.toFixed(2)}</span>`).join('<i>→</i>');
   const okRows = lad.filter(x => !x.over); const worst = okRows.length ? okRows[okRows.length - 1].cum : +p.stake;
@@ -362,15 +402,28 @@ function renderBotView() {
   form.querySelectorAll('[data-k]').forEach(el => el.onchange = () => {
     const k = el.dataset.k; let v = el.type === 'checkbox' ? el.checked : el.value;
     if (el.type === 'number' || k === 'ticks') v = +v;
+    if (RON()) { const r = RM(); r.draft[k] = v; renderBotView(); r.pushDraft().then(err => setFormErr(err ? 'Not saved on the server yet: ' + err : '')); return; }
     PARAMS[KEY][k] = v; saveParams(); setFormErr(''); renderBotView();
   });
   form.onsubmit = e => e.preventDefault();
-  $('bvStart').onclick = () => { if (BOT.running || BOT.open) stopBot(); else startBot(); };
+  $('bvStart').onclick = () => { if (RON()) { const x = RM().st; if (x && (x.bot.running || x.bot.open)) stopBot(); else startBot(); return; } if (BOT.running || BOT.open) stopBot(); else startBot(); };
   renderBotLive();
 }
 function setFormErr(msg) { const el = $('bvErr'); if (!el || !openBot) { if (msg) toast(msg); return; } el.hidden = !msg; el.textContent = msg || ''; }
+function renderBotLiveRemote() {
+  const r = RM(), x = r.st; if (!x) return; const b = x.bot, on = b.running || b.open;
+  const rows = r.hist ? rfRows(r.hist.rows).filter(h => h.session === x.session.id) : [];
+  const st = x.session; const state = { running: 'Running', stopping: 'Stopping', halted: 'Halted' }[b.state] || 'Idle';
+  $('bvLive').innerHTML = `<div class="row-between"><span class="bot-state ${state.toLowerCase()}">${state} · SERVER · DEMO</span><b class="${st.pnl > 0 ? 'up' : st.pnl < 0 ? 'dn' : ''}">${money(st.pnl, true)}</b></div>
+    <div class="bv-msg">${esc(b.state === 'halted' ? 'Stopped: ' + (b.halt_reason || '') : b.msg || 'Idle')}</div>
+    <div class="stats3"><div><span class="eyebrow">Trades</span><b>${st.trades}</b></div><div><span class="eyebrow">Won–lost</span><b>${st.wins}–${st.losses}</b></div><div><span class="eyebrow">${on ? 'Next stake' : 'Win rate'}</span><b>${on ? (b.next_stake != null ? '$' + (+b.next_stake).toFixed(2) + (b.step ? ` · s${b.step}` : '') : '—') : pct(st.winrate)}</b></div></div>`;
+  const btn = $('bvStart'); btn.textContent = on ? (b.running ? 'Stop bot' : 'Stopping…') : r.busy ? 'Starting…' : 'Start bot on server (Demo)';
+  btn.className = 'btn block ' + (on ? 'stop' : 'primary'); btn.disabled = !!(on && !b.running) || r.busy;
+  $('bvForm').querySelectorAll('input,select').forEach(el => el.disabled = !!on);
+  $('bvTrades').innerHTML = rows.slice().reverse().slice(0, 12).map(h => `<li><div>${esc(sideName(h.contract_type))} · $${(+h.stake).toFixed(2)}<small>${bhStamp(h.t)} · #${esc(h.contract_id)}${h.step ? ' · step ' + h.step : ''}</small></div><b class="${h.status === 'settled' ? (h.profit > 0 ? 'up' : 'dn') : 'muted'}">${h.status === 'settled' ? money(h.profit, true) : esc(h.status)}</b></li>`).join('') || '<li class="muted sm">No trades this session.</li>';
+}
 function renderBotLive() {
-  if (!openBot || !$('bvLive')) return; const b = BOT;
+  if (!openBot || !$('bvLive')) return; if (RON()) return renderBotLiveRemote(); const b = BOT;
   const on = b.running || b.open; const r = b.run && b.run.snapshot();
   const rows = rfRows(HIST).filter(h => h.session === SESSION.id);
   const st = E.statsOf(rows); const state = botState(b);
@@ -391,15 +444,19 @@ function init() {
   $('atsHistMode').querySelectorAll('button').forEach(b => b.onclick = () => { histMode = b.dataset.m; renderHistory(); });
   $('atsStopAll').onclick = () => stopAll();
   $('atsNameEdit').onclick = () => { const n = prompt('Your name for the ATS welcome (stored only on this phone). The new Deriv API does not share your account name.', accountName() === 'Trader' ? '' : accountName()); if (n != null) { n.trim() ? localStorage.setItem(LS.name, n.trim().slice(0, 40)) : localStorage.removeItem(LS.name); render(); } };
-  $('atsLimitsEdit').onclick = () => { const sl = prompt('Stop the bot when this session loses ($):', GLOBAL.sl); if (sl == null) return; const tp = prompt('Stop the bot when this session earns ($):', GLOBAL.tp); if (tp == null) return;
+  $('atsNewSession').onclick = () => { const x = RM() && RM().st; if (x && (x.bot.running || x.bot.open)) { toast('Stop the bot first'); return; }
+    if (confirm('Start a new session on the server? Session P&L and the ATS limits count from $0 again. History is kept.')) RM().newSession().then(() => toast('New session started'), rErr); };
+  $('atsLimitsEdit').onclick = () => { if (RON()) { const g = RM().st && RM().st.global; if (!g) return; const sl = prompt('Server bot: stop when this session loses ($):', g.sl); if (sl == null) return; const tp = prompt('Server bot: stop when this session earns ($):', g.tp); if (tp == null) return;
+      if (+sl > 0 && +tp > 0) RM().saveGlobal({ sl: +sl, tp: +tp }).then(() => toast('Limits saved on the server'), rErr); else toast('Both limits must be above $0'); return; }
+    const sl = prompt('Stop the bot when this session loses ($):', GLOBAL.sl); if (sl == null) return; const tp = prompt('Stop the bot when this session earns ($):', GLOBAL.tp); if (tp == null) return;
     if (+sl > 0 && +tp > 0) { GLOBAL.sl = +sl; GLOBAL.tp = +tp; save(LS.global, GLOBAL); render(); } else toast('Both limits must be above $0'); };
   $('atsExport').onclick = () => { const cols = ['t', 'mode', 'symbol', 'contract_type', 'contract_id', 'stake', 'cycle', 'duration', 'step', 'status', 'result', 'profit', 'entry_spot', 'exit_spot', 'why'];
     const csv = [cols.join(',')].concat(histRows().map(h => cols.map(c => c === 't' ? C.fmtBahrain(h.t) : JSON.stringify(h[c] == null ? '' : h[c])).join(','))).join('\n');
     const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' })); a.download = `ats-risefall-history-${Date.now()}.csv`; a.click(); };
-  $('atsClear').onclick = () => { if (anyRunning()) { toast('Stop the bot first'); return; } if (confirm('Delete the ATS trade history on this phone? Export first if you need it.')) { HIST = HIST.filter(h => h.status === 'open'); saveHist(); render(); } };
+  $('atsClear').onclick = () => { if (RON()) { toast('Server history is kept on the server (export CSV to save a copy)'); return; } if (anyRunning()) { toast('Stop the bot first'); return; } if (confirm('Delete the ATS trade history on this phone? Export first if you need it.')) { HIST = HIST.filter(h => h.status === 'open'); saveHist(); render(); } };
   setInterval(() => {
     // safety: a mode switch stops the bot that was started on the other account
-    if (BOT.running && BOT.mode !== DA.state.mode) haltBot(BOT, `Account switched to ${DA.state.mode.toUpperCase()} — stopped`);
+    if (!RON() && BOT.running && BOT.mode !== DA.state.mode) haltBot(BOT, `Account switched to ${DA.state.mode.toUpperCase()} — stopped`);
     if ($('tab-ats').classList.contains('active')) render();
   }, 1000);
   setInterval(() => { if (HIST.some(h => h.status === 'open') && DA.snapshot().connected) reconcileOrphans(); }, 30e3);

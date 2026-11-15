@@ -12,8 +12,17 @@
     desc: 'CALL / PUT on Volatility 25 (1s). Our analysis picks the side. Martingale ×2.1.',
     defaults: { stake: 0.35, cycle: '5m', custom_n: 10, custom_u: 'm', ticks: 5, align: true, direction: 'analysis',
       martingale: true, mg_factor: 2.1, mg_max_steps: 3, mg_reset_win: true,
-      session_sl: 6, session_tp: 3, max_consec_losses: 4, max_stake: 3.5 }
+      session_sl: 6, session_tp: 3, max_consec_losses: 4, max_stake: 3.5,
+      // strategy: 'classic' = the analysis above; 'model10m' = 10-minute neural-net forward test (server, demo only)
+      strategy: 'classic', model_stake: 1, day_tp: 1, day_sl: 2 }
   };
+  const STRATEGIES = { classic: 'Classic analysis', model10m: 'Model test · 10m neural net' };
+  /** Effective params for the Model strategy: 10m contracts aligned to the decision grid, flat stake, no martingale,
+   *  and the bot's own stop-loss / take-profit become the daily −$day_sl / +$day_tp (reset each Bahrain day). */
+  function modelParams(p) {
+    return Object.assign({}, p, { strategy: 'model10m', cycle: 'custom', custom_n: 10, custom_u: 'm', align: true, direction: 'analysis',
+      martingale: false, stake: +p.model_stake, session_tp: +p.day_tp, session_sl: +p.day_sl });
+  }
   const BOT_TYPES = { risefall: BOT };
 
   /** Round a stake to cents and never below the API minimum. */
@@ -83,6 +92,13 @@
     if (+p.stake > +p.session_sl) errs.push('Stake is larger than the session stop-loss');
     if (p.martingale) { num('mg_factor', 1.01, 20, 'Martingale factor'); num('mg_max_steps', 1, 10, 'Martingale max steps'); }
     if (!['analysis', 'up', 'down', 'alternate'].includes(p.direction)) errs.push('Pick a direction mode');
+    if (p.strategy != null && !STRATEGIES[p.strategy]) errs.push('Pick a strategy');
+    if (p.strategy === 'model10m') {
+      num('model_stake', MIN_STAKE, 1000, 'Model stake'); num('day_tp', 0.01, 1000, 'Daily profit lock'); num('day_sl', 0.01, 1000, 'Daily stop');
+      if (Math.abs(r2(p.model_stake) - +p.model_stake) > 1e-9) errs.push('Model stake can have at most 2 decimals');
+      if (+p.model_stake > +p.day_sl) errs.push('Model stake is larger than the daily stop');
+      if (+p.model_stake > +p.max_stake) errs.push('Model stake is above the max stake cap');
+    }
     if (p.cycle === 'ticks') { if (!(+p.ticks >= TICKS[0] && +p.ticks <= TICKS[1] && Number.isInteger(+p.ticks))) errs.push(`Ticks must be ${TICKS[0]}–${TICKS[1]}`); }
     else { const s = cycleSec(p); if (!s || s < 60 || s > 86400 || s % 60) errs.push('Cycle must be 1 minute to 1 day (whole minutes)'); }
     return errs;
@@ -143,7 +159,7 @@
     return req;
   }
 
-  const api = { SYMBOL, SYMBOL_NAME, MIN_STAKE, BOT, BOT_TYPES, TICKS, CYCLES, CYCLE_OPTS, cycleSec, cycleDuration, cycleLabel, graceSec, alignPlan, analysisTFs, gLabel, GRANS,
+  const api = { SYMBOL, SYMBOL_NAME, MIN_STAKE, BOT, BOT_TYPES, STRATEGIES, modelParams, TICKS, CYCLES, CYCLE_OPTS, cycleSec, cycleDuration, cycleLabel, graceSec, alignPlan, analysisTFs, gLabel, GRANS,
     roundStake, stakeLadder, validateParams, BotRun, statsOf, buildProposal, r2 };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ATSEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

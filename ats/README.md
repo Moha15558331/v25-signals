@@ -26,3 +26,14 @@ The bot can run 24/7 on Mohamed's server (`ats-server`, `/opt/ats`, systemd `ats
 - **This phone** (the same switch) is the old local mode, kept as a fallback. In local mode the bot runs in the browser, so iPhone pauses it when the app is backgrounded or the screen locks.
 
 Tests: `node tests/ats-engine.test.js`.
+
+## Model test (v3.1, server only, demo only)
+
+Bot → **Strategy** → "Model test · 10m neural net (demo)". The server runs the 10-minute neural net from the edge search (`/opt/ats/shared/model10m.js` + `model10m.json`, a JS port checked against the Python model):
+
+- Every 10 minutes (hh:01, hh:11, … Bahrain) it scores V25 and buys a 10-minute Rise/Fall **only** when the call is in its top 10% (P(Rise) above 61.75% or below 38.25%).
+- Flat $1 stake, no martingale. Daily +$1 profit lock and −$2 stop (Bahrain day). The ATS session limits, max losses in a row and max stake cap still apply.
+- Every call is logged (traded or not), and each signal is scored on the candle close 10 minutes later, so accuracy is measured on more than the few trades the daily lock allows.
+- The dashboard shows a **Model test** card: trades, win rate, P&L, the 95% range against the 51.3% break-even, all-signal accuracy, today, this week, and the last call. API: `GET /api/model`.
+
+Research result: 54.4% on 579 out-of-sample trades, not statistically proven. This is a live forward test, not a money maker.

@@ -2,74 +2,127 @@
 <html lang="en"><head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0b0f17">
+<meta name="theme-color" content="#0a0b0d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="V25 Signals">
 <meta name="application-name" content="V25 Signals">
-<meta name="description" content="Paper-trading signal lab for Deriv Volatility 25 (1s). Never places trades.">
+<meta name="app-version" content="2.0.0">
+<meta name="description" content="Signal lab for Deriv Volatility 25 (1s): live chart, hourly calls, honest accuracy stats, demo-account trading.">
 <title>V25 Signals</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="icon" type="image/png" sizes="512x512" href="icons/icon-512.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=2">
 </head><body>
 <header id="top">
-  <div class="row">
-    <select id="symbol"></select>
-    <div class="price"><span id="px">—</span><small id="chg"></small></div>
-    <div class="conn"><span id="dot" class="dot"></span><small id="conn">offline</small></div>
-  </div>
-  <div class="sub"><small id="rate">0.0 ticks/s</small><small id="clock"></small></div>
+  <button type="button" class="sym" id="symBtn" aria-label="Market"><span id="symName">Volatility 25 (1s)</span></button>
+  <div class="live"><span id="dot" class="dot"></span><span id="conn">Connecting</span></div>
+  <button type="button" class="icon-btn" id="openDetails" aria-label="Details and settings">
+    <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+  </button>
 </header>
 
 <main>
+<!-- ============ CHART ============ -->
 <section id="tab-chart" class="tab active">
-  <div class="tfbar" id="tfbar"></div>
-  <div id="chart"></div>
-  <div class="legend" id="srlegend"></div>
+  <div class="hero">
+    <div class="eyebrow">Last price</div>
+    <div class="price" id="px">—</div>
+    <div class="hero-sub"><span id="chg" class="chip">—</span><span class="muted" id="clock"></span></div>
+  </div>
+  <div class="seg" id="tfbar" role="tablist"></div>
+  <div class="card chart-card"><div id="chart"></div></div>
+  <div class="legend">
+    <span><i class="sw sw-r"></i>Resistance</span><span><i class="sw sw-s"></i>Support</span><span><i class="sw sw-t"></i>1h target</span>
+    <span class="muted" id="srlegend"></span>
+  </div>
 </section>
 
+<!-- ============ SIGNAL ============ -->
 <section id="tab-signal" class="tab">
-  <div class="card warn">⚠️ Volatility 25 is a <b>synthetic random index</b>. Moves are generated to be unpredictable, so no edge is proven. Treat every call as <b>untested</b> until the Stats screen shows a verified edge. Paper-trade only; this app never places trades.</div>
-  <div id="installTip" class="card install-tip" hidden>
-    <p>On iPhone: tap the <b>Share</b> button, then <b>Add to Home Screen</b>. Open it from your home screen to use it like an app.</p>
-    <button type="button" class="btn" id="dismissInstall">Got it</button>
+  <div id="installTip" class="card tip" hidden>
+    <p>Install: tap <b>Share</b>, then <b>Add to Home Screen</b>.</p>
+    <button type="button" class="btn ghost sm" id="dismissInstall">Got it</button>
   </div>
-  <div class="card sig" id="sigcard"><div class="muted">Loading market data…</div></div>
-  <button id="predictNow" class="btn primary">Predict now (log manual signal)</button>
-  <div class="card"><h3>Input votes</h3><div id="votes"></div></div>
-  <div class="card"><h3>Indicator snapshot <small class="muted">(supporting context only)</small></h3><div id="inds"></div></div>
+  <div class="card dircard" id="sigcard"><div class="muted">Loading market data…</div></div>
+  <div class="next card">
+    <div><div class="eyebrow">Next hourly signal</div><div class="next-time" id="nextAt">—</div></div>
+    <div class="countdown" id="countdown">--:--</div>
+  </div>
+  <details class="card fold" id="whyFold"><summary>Why this call</summary><ol class="reasons" id="reasons"></ol></details>
+  <button id="predictNow" class="btn ghost block">Run prediction now</button>
+
+  <div class="card demo" id="demoCard">
+    <div class="row-between"><h3>Demo account</h3><span class="pill" id="demoPill">Not connected</span></div>
+    <div class="demo-bal"><span class="eyebrow">Demo balance</span><b id="demoBal">—</b></div>
+    <div class="stats3">
+      <div><span class="eyebrow">Today</span><b id="demoToday">—</b></div>
+      <div><span class="eyebrow">Open</span><b id="demoOpen">—</b></div>
+      <div><span class="eyebrow">Settled</span><b id="demoSettled">—</b></div>
+    </div>
+    <ul class="trades" id="demoTrades"></ul>
+    <p class="fine" id="demoGuards"></p>
+    <p class="fine warn-text" id="demoErr" hidden></p>
+    <button type="button" class="btn ghost block" id="resetDemo">Reset demo balance</button>
+  </div>
 </section>
 
+<!-- ============ STATS ============ -->
 <section id="tab-stats" class="tab">
-  <div class="card" id="overall"></div>
-  <div class="card"><h3>Paper trading</h3>
-    <div class="grid3"><label>Balance $<input id="pbal" type="number" step="1" inputmode="decimal"></label><label>Stake $<input id="pstake" type="number" step="0.5" inputmode="decimal"></label><label>Payout %<input id="ppay" type="number" step="0.5" inputmode="decimal"></label></div>
-    <p class="note">Rise/Fall pays <b>less than 100%</b> of stake on a win (often ~90–95% depending on duration/stake); you lose 100% on a loss. So you need a hit rate above ~51–53% just to break even. Check the real payout on Deriv's trade ticket and enter it here.</p>
-    <div id="pnlSummary"></div><div id="pnl"></div>
+  <div class="card hero-card" id="overall"></div>
+  <div class="card" id="paperCard">
+    <div class="row-between"><h3>Paper P&amp;L</h3><span class="muted sm" id="paperMeta"></span></div>
+    <div id="pnlSummary" class="pnl-sum"></div>
+    <div id="pnl"></div>
   </div>
-  <div class="card"><h3>Hit rate by slice</h3><p class="note" id="edgeRule"></p><div id="slices"></div></div>
-  <div class="card"><h3>Signal log</h3>
-    <div class="btnrow">
-      <button class="btn" id="syncBox">Sync signal log</button>
-      <button class="btn" id="expCsv">Export CSV</button><button class="btn" id="expJson">Export JSON</button>
-      <label class="btn">Import<input id="imp" type="file" accept=".csv,.json" hidden></label>
-      <button class="btn danger" id="clear">Clear</button>
-    </div>
-    <p class="note">Sync pulls the published logger snapshot when this app is hosted online, or the local box file when you serve the project folder. You can also Import a CSV/JSON export.</p>
-    <label class="chk"><input type="checkbox" id="showBoot"> show bootstrap/test entries</label>
-    <div class="tablewrap"><table id="logtbl"></table></div>
-  </div>
+  <div class="section-title">Accuracy by slice</div>
+  <div id="slices"></div>
+  <p class="fine" id="edgeRule"></p>
 </section>
 </main>
 
-<nav id="tabs"><button type="button" data-tab="chart" class="active">📈<span>Chart</span></button><button type="button" data-tab="signal">🎯<span>Signal</span></button><button type="button" data-tab="stats">📊<span>Stats</span></button></nav>
+<nav id="tabs">
+  <button type="button" data-tab="chart" class="active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l5-5 4 3 8-8"/><path d="M15 7h5v5"/></svg><span>Chart</span></button>
+  <button type="button" data-tab="signal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/></svg><span>Signal</span></button>
+  <button type="button" data-tab="stats"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 20V11M12 20V5M19 20v-6"/></svg><span>Stats</span></button>
+</nav>
+
+<!-- ============ DETAILS SHEET ============ -->
+<div class="scrim" id="scrim" hidden></div>
+<aside class="sheet" id="sheet" aria-hidden="true">
+  <div class="grabber"></div>
+  <div class="sheet-head"><h2>Details</h2><button type="button" class="icon-btn" id="closeDetails" aria-label="Close">✕</button></div>
+  <div class="sheet-body">
+    <div class="group">
+      <label class="field">Market<select id="symbol"></select></label>
+      <div class="fine" id="rate"></div>
+    </div>
+    <details class="fold plain" open><summary>Model inputs (votes)</summary><div id="votes"></div><p class="fine" id="scoreLine"></p></details>
+    <details class="fold plain"><summary>Indicator snapshot</summary><div id="inds"></div><p class="fine">Indicators are supporting context only, not the signal source.</p></details>
+    <details class="fold plain"><summary>Paper trading settings</summary>
+      <div class="grid3"><label class="field">Balance $<input id="pbal" type="number" step="1" inputmode="decimal"></label><label class="field">Stake $<input id="pstake" type="number" step="0.5" inputmode="decimal"></label><label class="field">Payout %<input id="ppay" type="number" step="0.5" inputmode="decimal"></label></div>
+      <p class="fine">Rise/Fall pays less than 100% on a win and loses the full stake on a loss, so you need a hit rate above ~51–53% just to break even.</p>
+    </details>
+    <details class="fold plain"><summary>Signal log</summary>
+      <div class="btnrow">
+        <button class="btn sm" id="syncBox">Sync</button><button class="btn sm" id="expCsv">Export CSV</button><button class="btn sm" id="expJson">Export JSON</button>
+        <label class="btn sm">Import<input id="imp" type="file" accept=".csv,.json" hidden></label><button class="btn sm danger" id="clear">Clear</button>
+      </div>
+      <label class="chk"><input type="checkbox" id="showBoot"> Show bootstrap/test entries</label>
+      <div class="tablewrap"><table id="logtbl"></table></div>
+    </details>
+    <details class="fold plain"><summary>About &amp; risk</summary>
+      <p class="fine">Volatility 25 is a synthetic random index. Its moves are generated to be unpredictable, and a one-year backtest showed no edge (≈48–49% hit rate). Every call is <b>untested</b> until the Stats tab shows a verified edge on new data. Auto-trading runs on a Deriv <b>demo</b> account only, from the box logger; this app never holds your token and never places real-money trades. Times are Bahrain (UTC+3).</p><p class="fine">Version 2.0.0</p>
+    </details>
+  </div>
+</aside>
+<div class="toast" id="toast" hidden></div>
 
 <script src="vendor/lightweight-charts.js"></script>
 <script>window.LightweightCharts || document.write('<script src="https://unpkg.com/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"><\/script>')</script>
-<script src="shared/core.js"></script>
-<script src="app.js"></script>
+<script src="shared/core.js?v=2"></script>
+<script src="app.js?v=2"></script>
 </body></html>

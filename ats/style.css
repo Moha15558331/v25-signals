@@ -325,3 +325,15 @@ main{position:relative;z-index:1;max-width:560px;margin:0 auto;padding:14px 16px
 .ses-dots i.w{background:var(--green);border-color:transparent}.ses-dots i.l{background:var(--red);border-color:transparent}
 .ses-dots i.c{background:var(--accent-soft);border-color:color-mix(in srgb,var(--accent) 45%,transparent)}
 .t-ico.m.up{background:var(--green-soft);color:var(--green)}.t-ico.m.dn{background:var(--red-soft);color:var(--red)}
+
+/* MT5 tab */
+.mt5-hero .big-pnl.up{color:var(--green)}.mt5-hero .big-pnl.dn{color:var(--red)}
+.mt5-go{margin-top:14px}
+.mt5-live{font-size:28px;font-weight:650;letter-spacing:-.8px;font-variant-numeric:tabular-nums;margin:2px 0}
+.mt5-pos .btn{margin-top:12px}
+.mt5-sig b{display:block;font-size:17px;margin-top:2px}.mt5-sig small{color:var(--muted);font-size:12px}
+.mt5-tf{display:grid;grid-template-columns:repeat(5,1fr);gap:6px;margin-top:12px}
+.mt5-tf span{background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:6px 4px;text-align:center;font-size:10.5px;font-weight:600;color:var(--muted)}
+.mt5-tf span b{display:block;font-size:13px;color:var(--text);font-variant-numeric:tabular-nums}
+.mt5-tf span.up b{color:var(--green)}.mt5-tf span.dn b{color:var(--red)}
+.mt5-note{font-size:12px;margin:10px 0 0}

@@ -98,7 +98,7 @@ function ask({ title, text, ok = 'Continue', danger, real, html }) { return new 
 
 /* ---------- navigation ---------- */
 let view = 'home';
-function go(v) { view = v; for (const x of ['home', 'stats', 'history', 'settings']) { const el = $('v-' + x); el.hidden = x !== v; if (x === v) { el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; } }
+function go(v) { view = v; if (window.ATSMT5) window.ATSMT5.show(v === 'mt5'); for (const x of ['home', 'mt5', 'stats', 'history', 'settings']) { const el = $('v-' + x); el.hidden = x !== v; if (x === v) { el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; } }
   document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.go === v)); window.scrollTo({ top: 0 }); render(); }
 document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
 
@@ -397,8 +397,8 @@ $('pairBtn').onclick = async () => { const k = ($('pairInput').value || '').trim
 $('pairInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('pairBtn').click(); });
 
 /* ---------- render loop ---------- */
-function render() { renderHeader(); if (view === 'home') renderHome(); else if (view === 'stats') renderStats(); else if (view === 'history') renderHistory(); else renderSettings(); }
+function render() { renderHeader(); if (view === 'mt5') { if (window.ATSMT5) window.ATSMT5.render(); } else if (view === 'home') renderHome(); else if (view === 'stats') renderStats(); else if (view === 'history') renderHistory(); else renderSettings(); }
 R.on(() => { pumpEvents(R.st); if (view === 'settings' && dirty) { renderHeader(); return; } if (view === 'settings' && document.activeElement && document.activeElement.closest && document.activeElement.closest('#setBody')) { renderHeader(); return; } render(); });
-window.ATSApp = { go, toast, render, setTheme, openAccount };
+window.ATSApp = { go, toast, render, setTheme, openAccount, ask };
 render(); R.kick();
 })();

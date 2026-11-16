@@ -9,13 +9,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ATS">
 <meta name="application-name" content="ATS">
-<meta name="app-version" content="4.2.0">
-<meta name="description" content="The ATS bot on Volatility 25 (1s): Differs with Over/Under recovery, in daily sessions. Runs 24/7 on your server. Demo by default.">
+<meta name="app-version" content="4.3.0">
+<meta name="description" content="The ATS bot: Deriv Multipliers on synthetic indices, every indicator voting, in daily sessions. Runs 24/7 on your server. Demo by default.">
 <title>ATS · Auto Trading System</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=45">
+<link rel="stylesheet" href="style.css?v=46">
 <script>try{var t=localStorage.getItem('ats.theme2')||'auto';var d=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){document.documentElement.dataset.theme='dark';}</script>
 </head><body>
 <header class="top" id="top">
@@ -54,25 +54,22 @@
           <div><span class="eyebrow">Trades</span><b id="dayTrades">0</b></div>
           <div><span class="eyebrow">Win rate</span><b id="dayWin">—</b></div>
           <div><span class="eyebrow" id="sesLbl">Session</span><b id="sesPnl">$0.00</b></div>
-          <div><span class="eyebrow">Next</span><b id="nextStake">—</b></div>
+          <div><span class="eyebrow">Stake</span><b id="nextStake">—</b></div>
         </div>
+        <div class="ses-dots" id="sesDots"></div>
       </div>
 
       <div class="control">
         <div class="status-line" id="statusLine"><i class="dot"></i><span id="statusTxt">Connecting…</span></div>
       </div>
 
-      <div class="card phase-card" id="phaseCard">
-        <div class="phase-head">
-          <div><span class="eyebrow">Phase</span><div class="phase-name" id="phaseName">Differs</div><div class="sub" id="phaseSub">Least digit · 1 tick</div></div>
-          <div class="digit-ring" id="digitRing"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" class="ring-bg"/><circle cx="32" cy="32" r="28" class="ring-fg" id="ringFg"/></svg><span id="digitBig">–</span><small>DIFFERS</small></div>
+      <div class="card pos-card" id="posCard">
+        <div class="pos-head">
+          <div><span class="eyebrow" id="posEye">Signal</span><div class="pos-name" id="posName">Watching</div><div class="sub" id="posSub">—</div></div>
+          <div class="digit-ring" id="confRing"><svg viewBox="0 0 64 64"><circle cx="32" cy="32" r="28" class="ring-bg"/><circle cx="32" cy="32" r="28" class="ring-fg" id="ringFg"/></svg><span id="ringBig">–</span><small id="ringSmall">AGREE</small></div>
         </div>
-        <div class="ladder" id="ladder"></div>
-        <div class="cap-note" id="capNote"></div>
-        <div class="freq" id="freq"></div>
-        <div class="rec-line" id="recLine"></div>
+        <div id="posBody"></div>
       </div>
-
 
       <div class="card">
         <div class="card-h"><h3>Recent trades</h3><button type="button" class="link" data-go="history">See all</button></div>
@@ -112,8 +109,8 @@
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="sheet-wrap" id="sheetWrap" hidden><div class="sheet-bg" id="sheetBg"></div><div class="sheet" id="sheet" role="dialog"></div></div>
 
-<script src="shared/ats-engine.js?v=45"></script>
-<script src="shared/hybrid.js?v=45"></script>
-<script src="remote.js?v=45"></script>
-<script src="app.js?v=45"></script>
+<script src="shared/ats-engine.js?v=46"></script>
+<script src="shared/hybrid.js?v=46"></script>
+<script src="remote.js?v=46"></script>
+<script src="app.js?v=46"></script>
 </body></html>

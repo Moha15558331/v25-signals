@@ -46,6 +46,7 @@ const R = {
   saveRf(rf_params) { return this.act('PUT', '/api/settings', { rf_params }); },
   saveGlobal(g) { return this.act('PUT', '/api/settings', { global: g }); },
   newSession() { return this.act('POST', '/api/session/new'); },
+  closePosition() { return this.act('POST', '/api/position/close'); },
   realOn() { return this.act('POST', '/api/real', { enable: true, confirm: true, key: get(LS.key) }); },
   realOff() { return this.act('POST', '/api/real', { enable: false }); },
   realCap(cap, confirm) { return this.act('POST', '/api/real', { lifetime_cap: cap, confirm: confirm ? true : undefined }); },

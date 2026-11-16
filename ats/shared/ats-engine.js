@@ -15,11 +15,13 @@
       session_sl: 6, session_tp: 3, max_consec_losses: 4, max_stake: 3.5,
       // strategy: 'hybrid' = the ATS bot (Differs on the least digit, Over 2 / Under 7 recovery; shared/hybrid.js, server only),
       // 'classic' = the analysis above; 'model10m' = 10-minute neural-net forward test (kept, hidden; server, demo only)
-      strategy: 'hybrid', model_stake: 1, day_tp: 1, day_sl: 2,
+      strategy: 'mult', model_stake: 1, day_tp: 1, day_sl: 2,
       diff_lookback: 100, diff_gap: 2.5, rec_secs: 15, rec_side: 'auto', smart_mg: true,
-      ses_on: false, ses_count: 7, ses_tp: 0.5, ses_sl: 2, ses_pause: 60 }
+      ses_on: false, ses_count: 7, ses_tp: 0.5, ses_sl: 2, ses_pause: 60,
+      // strategy 'mult' (v4.3, shared/mult.js): Deriv Multipliers, ensemble of every indicator, TP / SL per trade
+      m_symbol: '1HZ25V', m_mult: 160, m_stake: 1, m_tp: 0.5, m_sl: 0.5, m_conf: 65, m_maxmin: 0, m_mg: false, m_mg_factor: 2, m_mg_steps: 2, m_max_losses: 8 }
   };
-  const STRATEGIES = { hybrid: 'ATS bot · Differs + Over/Under recovery', classic: 'Classic analysis', model10m: 'Model test · 10m neural net' };
+  const STRATEGIES = { mult: 'ATS bot · Multipliers', hybrid: 'ATS bot · Differs + Over/Under recovery', classic: 'Classic analysis', model10m: 'Model test · 10m neural net' };
   /** Effective params for the Model strategy: 10m contracts aligned to the decision grid, flat stake, no martingale,
    *  and the bot's own stop-loss / take-profit become the daily −$day_sl / +$day_tp (reset each Bahrain day). */
   function modelParams(p) {

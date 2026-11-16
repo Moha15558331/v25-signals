@@ -9,13 +9,13 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ATS">
 <meta name="application-name" content="ATS">
-<meta name="app-version" content="4.1.0">
-<meta name="description" content="Two bots on Volatility 25 (1s): the ATS bot (Differs with Over/Under recovery) and Rise/Fall 1H. Runs 24/7 on your server. Demo by default.">
+<meta name="app-version" content="4.2.0">
+<meta name="description" content="The ATS bot on Volatility 25 (1s): Differs with Over/Under recovery, in daily sessions. Runs 24/7 on your server. Demo by default.">
 <title>ATS · Auto Trading System</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
 <link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=44">
+<link rel="stylesheet" href="style.css?v=45">
 <script>try{var t=localStorage.getItem('ats.theme2')||'auto';var d=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){document.documentElement.dataset.theme='dark';}</script>
 </head><body>
 <header class="top" id="top">
@@ -53,7 +53,7 @@
         <div class="hero-stats">
           <div><span class="eyebrow">Trades</span><b id="dayTrades">0</b></div>
           <div><span class="eyebrow">Win rate</span><b id="dayWin">—</b></div>
-          <div><span class="eyebrow">Session</span><b id="sesPnl">$0.00</b></div>
+          <div><span class="eyebrow" id="sesLbl">Session</span><b id="sesPnl">$0.00</b></div>
           <div><span class="eyebrow">Next</span><b id="nextStake">—</b></div>
         </div>
       </div>
@@ -84,14 +84,12 @@
   <!-- STATS -->
   <section class="view" id="v-stats" hidden>
     <h1 class="page-title">Stats</h1>
-    <div class="seg" id="statSeg"><button type="button" data-b="ats" class="on">ATS bot</button><button type="button" data-b="rf1h">Rise/Fall 1H</button></div>
     <div id="statsBody"><div class="card"><p class="muted">Loading…</p></div></div>
   </section>
 
   <!-- HISTORY -->
   <section class="view" id="v-history" hidden>
     <h1 class="page-title">History</h1>
-    <div class="seg" id="histSeg"><button type="button" data-f="all" class="on">All</button><button type="button" data-f="ats">ATS bot</button><button type="button" data-f="rf1h">Rise/Fall 1H</button><button type="button" data-f="real">Real</button></div>
     <div class="card"><ul class="trades" id="histList"></ul></div>
     <button type="button" class="btn ghost block" id="exportBtn">Export CSV</button>
   </section>
@@ -114,9 +112,8 @@
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="sheet-wrap" id="sheetWrap" hidden><div class="sheet-bg" id="sheetBg"></div><div class="sheet" id="sheet" role="dialog"></div></div>
 
-<script src="shared/ats-engine.js?v=44"></script>
-<script src="shared/hybrid.js?v=44"></script>
-<script src="shared/rf1h.js?v=44"></script>
-<script src="remote.js?v=44"></script>
-<script src="app.js?v=44"></script>
+<script src="shared/ats-engine.js?v=45"></script>
+<script src="shared/hybrid.js?v=45"></script>
+<script src="remote.js?v=45"></script>
+<script src="app.js?v=45"></script>
 </body></html>

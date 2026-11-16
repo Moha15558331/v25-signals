@@ -12,14 +12,19 @@
  *            to the room left before any stop-loss and to the max stake cap.
  *            Recovery win -> back to Differs at base. All steps lost -> back to Differs at base (chain busted).
  * Limits   : daily +day_tp lock / −day_sl stop (00:00 reset: the bot waits, then carries on),
- *            session SL/TP, max losses in a row, max stake cap (these halt the bot). */
+ *            session SL/TP, max losses in a row, max stake cap (these halt the bot).
+ * Sessions : (ses_on) the day is split into ses_count sessions. A session ends at +ses_tp or −ses_sl (or when the next stake no
+ *            longer fits under −ses_sl); the next one starts after ses_pause seconds with a fresh ladder and loss streak.
+ *            The day locks after ses_count sessions or at +day_tp, and stops at −day_sl. The run-level session_sl/tp are not used.
+ *            Smart martingale caps every stake at the room left in the session and in the day. */
 (function (root) {
   'use strict';
   const r2 = x => Math.round((+x + Number.EPSILON) * 100) / 100;
   const floor2 = x => Math.floor((+x + 1e-9) * 100) / 100;
   const MIN_STAKE = 0.35, PIP = 2;
   const DEFAULTS = { stake: 0.35, diff_lookback: 100, diff_gap: 2.5, rec_side: 'auto', mg_factor: 3.1, mg_max_steps: 3, smart_mg: true,
-    day_tp: 1, day_sl: 2, session_sl: 6, session_tp: 3, max_consec_losses: 4, max_stake: 3.5 };
+    day_tp: 1, day_sl: 2, session_sl: 6, session_tp: 3, max_consec_losses: 4, max_stake: 3.5,
+    ses_on: false, ses_count: 7, ses_tp: 0.5, ses_sl: 2, ses_pause: 60 };
 
   /** Last digit of a quote exactly as the HTML: toFixed(pip) then the final character. */
   const lastDigit = (price, pip = PIP) => { const s = (+price).toFixed(pip); return +s[s.length - 1]; };
@@ -60,26 +65,33 @@
     num('max_consec_losses', 1, 50, 'Max losses in a row'); num('max_stake', MIN_STAKE, 1000, 'Max stake cap');
     if (+p.max_stake < +p.stake) errs.push('Max stake cap must be at least the stake');
     if (+p.stake > +p.day_sl) errs.push('Stake is larger than the daily stop');
+    if (p.ses_on) { num('ses_count', 1, 50, 'Sessions per day'); if (!Number.isInteger(+p.ses_count)) errs.push('Sessions per day must be a whole number');
+      num('ses_tp', 0.01, 1000, 'Session take-profit'); num('ses_sl', 0.01, 1000, 'Session stop'); num('ses_pause', 0, 3600, 'Pause between sessions');
+      if (+p.stake > +p.ses_sl) errs.push('Stake is larger than the session stop'); }
     return errs;
   }
 
   class HybridRun {
     constructor(p, t) { this.p = Object.assign({}, DEFAULTS, p); this.phase = 'differs'; this.step = 0; this.chain = 0; this.chainLoss = 0;
       this.pnl = 0; this.trades = 0; this.wins = 0; this.losses = 0; this.consecLosses = 0; this.haltReason = null;
-      this.day = dayKey(t || Math.floor(Date.now() / 1000)); this.dayPnl = 0; this.dayTrades = 0; this.dayWins = 0; this.dayState = 'trading'; this.dayReason = null; }
-    static from(o, p) { const r = new HybridRun(p); Object.assign(r, o || {}); r.p = Object.assign({}, DEFAULTS, p); return r; }
+      this.day = dayKey(t || Math.floor(Date.now() / 1000)); this.dayPnl = 0; this.dayTrades = 0; this.dayWins = 0; this.dayState = 'trading'; this.dayReason = null;
+      this.ses = 1; this.sesPnl = 0; this.sesTrades = 0; this.sesUntil = 0; this.sesLog = []; }
+    static from(o, p) { const r = new HybridRun(p); Object.assign(r, o || {}); r.p = Object.assign({}, DEFAULTS, p);
+      if (!r.ses) Object.assign(r, { ses: 1, sesPnl: 0, sesTrades: 0, sesUntil: 0, sesLog: [] }); return r; }
     /** Roll to a new trading day if needed (resets day P/L and the chain). Returns true on a roll. */
     roll(t) { const d = dayKey(t); if (d === this.day) return false;
-      Object.assign(this, { day: d, dayPnl: 0, dayTrades: 0, dayWins: 0, dayState: 'trading', dayReason: null, phase: 'differs', step: 0, chainLoss: 0 }); return true; }
+      Object.assign(this, { day: d, dayPnl: 0, dayTrades: 0, dayWins: 0, dayState: 'trading', dayReason: null, phase: 'differs', step: 0, chainLoss: 0, ses: 1, sesPnl: 0, sesTrades: 0, sesUntil: 0, sesLog: [], consecLosses: 0 }); return true; }
     /** Clear today's P/L and unlock the day (demo Reset today). History is not touched. */
-    resetDay(t) { Object.assign(this, { day: dayKey(t || Math.floor(Date.now() / 1000)), dayPnl: 0, dayTrades: 0, dayWins: 0, dayState: 'trading', dayReason: null }); return this; }
+    resetDay(t) { Object.assign(this, { day: dayKey(t || Math.floor(Date.now() / 1000)), dayPnl: 0, dayTrades: 0, dayWins: 0, dayState: 'trading', dayReason: null, ses: 1, sesPnl: 0, sesTrades: 0, sesUntil: 0, sesLog: [] }); return this; }
     dayCheck() { const p = this.p;
       if (this.dayPnl >= +p.day_tp - 1e-9) { this.dayState = 'locked'; this.dayReason = `Daily +$${(+p.day_tp).toFixed(2)} lock reached`; }
       else if (this.dayPnl <= -p.day_sl + 1e-9) { this.dayState = 'stopped'; this.dayReason = `Daily −$${(+p.day_sl).toFixed(2)} stop reached`; }
+      else if (p.ses_on && this.sesLog.length >= +p.ses_count) { this.dayState = 'locked'; this.dayReason = `All ${+p.ses_count} sessions done`; }
       return this.dayState !== 'trading'; }
     halt(r) { if (!this.haltReason) this.haltReason = r; return { halt: this.haltReason }; }
     check() { const p = this.p;
       if (this.haltReason) return this.haltReason;
+      if (p.ses_on) { if (this.consecLosses >= p.max_consec_losses) this.haltReason = `${this.consecLosses} losses in a row (max ${p.max_consec_losses})`; return this.haltReason; }
       if (this.pnl <= -p.session_sl + 1e-9) this.haltReason = `Session stop-loss hit (${fmt(this.pnl)})`;
       else if (this.pnl >= +p.session_tp - 1e-9) this.haltReason = `Session take-profit reached (${fmt(this.pnl)})`;
       else if (this.consecLosses >= p.max_consec_losses) this.haltReason = `${this.consecLosses} losses in a row (max ${p.max_consec_losses})`;
@@ -90,24 +102,34 @@
       this.roll(t); if (this.check()) return { halt: this.haltReason };
       if (this.dayState !== 'trading' || this.dayCheck()) return { wait: 'day', until: nextMidnight(t), reason: this.dayReason, state: this.dayState };
       const p = this.p, kind = this.phase === 'recovery' ? 'overunder' : 'differs';
+      if (p.ses_on && this.sesUntil > t) return { wait: 'session', until: this.sesUntil, state: 'pause', reason: `Session ${this.ses}/${+p.ses_count} starts soon` };
       const full = kind === 'differs' ? r2(p.stake) : recStake(p, this.step);
-      const dayRoom = r2(+p.day_sl + this.dayPnl), sesRoom = r2(+p.session_sl + this.pnl);
+      const dayRoom = r2(+p.day_sl + this.dayPnl), sesRoom = p.ses_on ? r2(+p.ses_sl + this.sesPnl) : r2(+p.session_sl + this.pnl);
       const outRoom = extraRoom == null ? Infinity : r2(extraRoom);
       const room = Math.min(dayRoom, sesRoom, outRoom, +p.max_stake);
       let stake = full, capped = false;
       if (stake > room + 1e-9) {
         if (!p.smart_mg && stake > +p.max_stake + 1e-9) return this.halt(`Next stake $${stake.toFixed(2)} would exceed the $${(+p.max_stake).toFixed(2)} cap`);
-        if (!p.smart_mg) { if (dayRoom <= sesRoom && dayRoom <= outRoom) return this.dayStopEarly(t, stake); return this.halt(`Next stake $${stake.toFixed(2)} could break a stop-loss`); }
+        if (!p.smart_mg) { if (dayRoom <= sesRoom && dayRoom <= outRoom) return this.dayStopEarly(t, stake); if (p.ses_on && sesRoom <= outRoom) return this.sesStopEarly(t); return this.halt(`Next stake $${stake.toFixed(2)} could break a stop-loss`); }
         stake = floor2(room); capped = true;
-        if (stake < MIN_STAKE - 1e-9) { if (dayRoom <= sesRoom && dayRoom <= outRoom) return this.dayStopEarly(t, MIN_STAKE); return this.halt(`Only $${room.toFixed(2)} left before a stop-loss — below the $0.35 minimum`); }
+        if (stake < MIN_STAKE - 1e-9) { if (dayRoom <= sesRoom && dayRoom <= outRoom) return this.dayStopEarly(t, MIN_STAKE); if (p.ses_on && sesRoom <= outRoom) return this.sesStopEarly(t); return this.halt(`Only $${room.toFixed(2)} left before a stop-loss — below the $0.35 minimum`); }
       }
       return { kind, stake, step: kind === 'differs' ? 0 : this.step, capped, full };
     }
+    /** Close the current session (end: 'tp' | 'sl' | 'day') and line up the next one. Returns true if the day is over. */
+    endSession(t, end) { const p = this.p;
+      this.sesLog.push({ n: this.ses, pnl: this.sesPnl, trades: this.sesTrades, end, t });
+      Object.assign(this, { ses: this.ses + 1, sesPnl: 0, sesTrades: 0, consecLosses: 0, phase: 'differs', step: 0, chainLoss: 0, sesUntil: r2(t + Math.max(0, +p.ses_pause || 0)) });
+      return this.dayCheck(); }
+    sesStopEarly(t) { const prev = this.dayState; this.endSession(t, 'sl');
+      if (this.dayState !== 'trading') return { wait: 'day', until: nextMidnight(t), reason: this.dayReason, state: this.dayState, was: prev };
+      return { wait: 'session', until: this.sesUntil, state: 'pause', reason: `Session ${this.ses}/${+this.p.ses_count} starts soon` }; }
     dayStopEarly(t, s) { this.dayState = 'stopped'; this.dayReason = `Daily stop: a $${s.toFixed(2)} trade could break the −$${(+this.p.day_sl).toFixed(2)} stop`;
       return { wait: 'day', until: nextMidnight(t), reason: this.dayReason, state: 'stopped' }; }
     /** Record a settled trade. kind = 'differs' | anything else = a recovery trade. Returns an event: {event, ...} for alerts. */
-    onResult(kind, profit) {
-      profit = r2(+profit || 0); const win = profit > 0; const p = this.p;
+    onResult(kind, profit, t) {
+      profit = r2(+profit || 0); const win = profit > 0; const p = this.p; t = t || Math.floor(Date.now() / 1000);
+      if (p.ses_on) { this.sesPnl = r2(this.sesPnl + profit); this.sesTrades++; }
       this.trades++; this.pnl = r2(this.pnl + profit); this.dayTrades++; this.dayPnl = r2(this.dayPnl + profit);
       if (win) { this.wins++; this.dayWins++; this.consecLosses = 0; } else { this.losses++; this.consecLosses++; }
       let event;
@@ -121,11 +143,17 @@
       }
       const wasTrading = this.dayState === 'trading', midChain = this.phase === 'recovery'; this.dayCheck();
       const dayHit = wasTrading && this.dayState !== 'trading' ? this.dayState : null;
-      if (dayHit) { if (midChain) event = 'chain_cut'; this.phase = 'differs'; this.step = 0; this.chainLoss = 0; }
+      let sesHit = null;
+      if (p.ses_on) { const done = { n: this.ses, pnl: this.sesPnl };
+        const end = dayHit ? 'day' : this.sesPnl >= +p.ses_tp - 1e-9 ? 'tp' : this.sesPnl <= -p.ses_sl + 1e-9 ? 'sl' : null;
+        if (end) { this.endSession(t, end); sesHit = Object.assign(done, { end }); } }
+      const dayHit2 = dayHit || (wasTrading && this.dayState !== 'trading' ? this.dayState : null);
+      if ((dayHit2 || sesHit) && midChain) event = 'chain_cut';
+      if (dayHit2) { this.phase = 'differs'; this.step = 0; this.chainLoss = 0; }
       this.check();
-      return { event, win, profit, phase: this.phase, step: this.step, day: this.dayState, dayHit, halt: this.haltReason };
+      return { event, win, profit, phase: this.phase, step: this.step, day: this.dayState, dayHit: dayHit2, sesHit, halt: this.haltReason };
     }
-    snapshot() { const o = {}; for (const k of ['phase', 'step', 'chain', 'chainLoss', 'pnl', 'trades', 'wins', 'losses', 'consecLosses', 'haltReason', 'day', 'dayPnl', 'dayTrades', 'dayWins', 'dayState', 'dayReason']) o[k] = this[k]; return o; }
+    snapshot() { const o = {}; for (const k of ['phase', 'step', 'chain', 'chainLoss', 'pnl', 'trades', 'wins', 'losses', 'consecLosses', 'haltReason', 'day', 'dayPnl', 'dayTrades', 'dayWins', 'dayState', 'dayReason', 'ses', 'sesPnl', 'sesTrades', 'sesUntil', 'sesLog']) o[k] = this[k]; return o; }
   }
   const fmt = x => (x >= 0 ? '+$' : '−$') + Math.abs(x).toFixed(2);
   /** Effective stakes of a losing chain that starts at today's P/L `dayPnl` (default a fresh day): every cap applied in order.

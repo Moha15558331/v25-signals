@@ -16,7 +16,8 @@
       // strategy: 'hybrid' = the ATS bot (Differs on the least digit, Over 2 / Under 7 recovery; shared/hybrid.js, server only),
       // 'classic' = the analysis above; 'model10m' = 10-minute neural-net forward test (kept, hidden; server, demo only)
       strategy: 'hybrid', model_stake: 1, day_tp: 1, day_sl: 2,
-      diff_lookback: 100, diff_gap: 2.5, rec_secs: 15, rec_side: 'auto', smart_mg: true }
+      diff_lookback: 100, diff_gap: 2.5, rec_secs: 15, rec_side: 'auto', smart_mg: true,
+      ses_on: false, ses_count: 7, ses_tp: 0.5, ses_sl: 2, ses_pause: 60 }
   };
   const STRATEGIES = { hybrid: 'ATS bot · Differs + Over/Under recovery', classic: 'Classic analysis', model10m: 'Model test · 10m neural net' };
   /** Effective params for the Model strategy: 10m contracts aligned to the decision grid, flat stake, no martingale,

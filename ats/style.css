@@ -112,6 +112,13 @@ main{position:relative;z-index:1;max-width:560px;margin:0 auto;padding:14px 16px
 .bc-go.real{background:var(--real);color:#1a1406}
 .bc-go:disabled{opacity:.4}
 .bc-go:active{opacity:.8}
+.bots:has(.one){grid-template-columns:1fr}
+.bot-card.one{flex-direction:row;align-items:center;justify-content:space-between;gap:12px;padding:14px 14px 14px 16px;cursor:default}
+.bot-card.one .bc-l{min-width:0;display:flex;flex-direction:column;gap:4px}
+.bot-card.one .bc-top{justify-content:flex-start;gap:8px}
+.bot-card.one .bc-top b{font-size:15px}
+.bot-card.one .bc-sub{font-size:13px}
+.bot-card.one .bc-go{margin-top:0;min-width:104px;padding:0 18px;height:40px;flex:none}
 
 /* phase */
 .phase-card{overflow:hidden}

@@ -1,24 +1,18 @@
-# ATS · Auto Trading System (v4.1)
+# ATS · Auto Trading System (v4.3)
 
 A remote control and dashboard for the **ATS bot**, which runs 24/7 on Mohamed's server (`ats.2-29-170-227.sslip.io`). It is **demo by default**.
 
-## The ATS bot (strategy `hybrid`)
+## The ATS bot (strategy `mult`, v4.3)
 
-- **Differs:** DIGITDIFF on Volatility 25 (1s) `1HZ25V`, 1 tick, $0.35. It predicts the **least-occurring last digit of the last 100 ticks**. On a tie it takes the colder digit, the one whose last appearance came earliest. This is an exact port of the old HTML analyzer and the hybrid backtest (`shared/hybrid.js`, checked on 20,000 real ticks).
-- **Recovery:** a Differs loss switches to **1-tick Over 2 / Under 7** with martingale ×3.1 over 3 steps ($1.09 → $3.36 → $10.43; each step capped by the stops and the $3.50 stake cap).
-  - **Smart martingale** cuts any stake down to the room left before a stop-loss.
-  - A recovery win goes back to Differs at the base stake. If all 3 steps lose, the bot also goes back to base.
-- **Recovery side:** Auto picks the side whose losing digits were rarer in the last 100 ticks (0–2 for Over 2, 7–9 for Under 7); a tie goes to the last 20 ticks, then Over 2. It can be fixed to Over 2 or Under 7 in Settings.
-- **Daily limits:** a +$1 lock and a −$2 stop. They reset at 00:00, and the bot waits and then carries on by itself.
-- **Halt the bot (press Start again):** session SL $6 / TP $3, 4 losses in a row, the $3.50 stake cap, and the ATS session limits −$10 / +$6.
-- **Pacing:** a 2.5 s gap after each Differs win.
+- **Contract:** Deriv Multipliers, MULTUP (Up) / MULTDOWN (Down). Default Volatility 25 (1s) `1HZ25V` ×160 (the lowest allowed), $1 stake (Deriv minimum), take-profit $0.50 and stop-loss $0.50 per trade, commission $0.02. One position at a time.
+- **Markets:** V25 (1s) ×160/400/800/1200/1600, V75 `R_75` ×50/100/200/300/500, Jump 10 `JD10` ×100/200/300/500/1000 (SL up to 90% of stake). V5 has no contracts on Deriv.
+- **Direction:** every minute, an ensemble of RSI, MACD, EMA 9/21/50, Bollinger, Stochastic, ADX and ROC on 1m / 5m / 15m / 1h, plus the `core.js` chart analysis (multi-timeframe structure, S/R, EMAs). It trades only when at least 65% of the votes agree (setting); otherwise it waits (`shared/mult.js`).
+- **Sessions:** 7 a day, each ends at +$0.50 or −$2, 60 s pause. The day locks at +$3.50 (or after 7 sessions) and stops at −$4, then carries on at 00:00 Bahrain.
+- **Smart stop-loss cap:** a trade's stop-loss is cut to the room left in the session and the day. Martingale is off by default (setting: stake, TP and SL × factor after a loss).
+- **Close now:** the open position can be sold from the Home card. Stop leaves an open position to its TP / SL.
+- **Backtest (17 Oct–15 Nov 2026, real 1s ticks):** 446 trades, 50.2% won, ±$0.50 each, +$1.28 net; random direction did +$2.38. Expected value per trade is −$0.02 (commission); see /workspace/mult.
 
-## Rise/Fall 1H (second bot, demo only)
-
-- One Rise/Fall contract per hour candle, bought in the first minute of the hour, expiring at the next hour.
-- Direction from the chart analysis (`core.js`) on 1h candles with 4h and 1d above. No signal means the hour is skipped.
-- $0.35 base, martingale ×2.1 over 3 steps, smart martingale, its own daily +$1 / −$2.
-- It runs next to the ATS bot on the same demo account. The session limits count both bots together.
+Older strategies (Differs + Over/Under, Rise/Fall 1H) are kept in the code and history, not shown in the app.
 
 ## Real money (off by default)
 

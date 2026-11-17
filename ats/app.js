@@ -1,7 +1,7 @@
-/* ATS v4.3 app: remote control + dashboard for the server bot (Deriv Multipliers). Views: Home, Stats, History, Settings. */
+/* ATS v4.5 app: remote control + dashboard for the server bot (5m Rise/Fall, Multipliers toggle). Views: Home, Stats, History, Settings. */
 (() => {
 'use strict';
-const APP_VER = '4.3.0';
+const APP_VER = '4.5.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -20,7 +20,7 @@ const APP_VER = '4.3.0';
     setInterval(ping, 60e3);
     document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
   };
-  const start = () => navigator.serviceWorker.register('./sw.js?v=12', { scope: './' }).then(track).catch(() => { });
+  const start = () => navigator.serviceWorker.register('./sw.js?v=13', { scope: './' }).then(track).catch(() => { });
   if (document.readyState === 'complete') start(); else window.addEventListener('load', start);
 })();
 const R = window.ATSRemote, H = window.ATSHybrid, E = window.ATSEngine;
@@ -121,16 +121,22 @@ function renderHeader() { const st = R.st, b = st && st.bot, on = !!(b && (b.run
 /* ---------- home: the bot card (Start/Stop), today, phase ---------- */
 let prevPnl = null, prevPhase = null, prevDigit = null, prevTop = null;
 const sel = 'ats';
+const NAME_KEY = 'ats.name';
+function accountName() { try { const n = localStorage.getItem(NAME_KEY); if (n) return n; } catch (e) { } return 'Trader'; }
+function editName() { const cur = accountName(); const n = prompt('Your name for the welcome screen (stored only on this phone). The Deriv API does not share your account name.', cur === 'Trader' ? '' : cur);
+  if (n == null) return; try { n.trim() ? localStorage.setItem(NAME_KEY, n.trim().slice(0, 40)) : localStorage.removeItem(NAME_KEY); } catch (e) { } if ($('atsName')) $('atsName').textContent = accountName(); }
+function isMultStrat(st) { return !!(st && st.bot && st.bot.strategy === 'mult'); }
+function atsView(st) { return isMultStrat(st) ? st.mult : (st.classic || st.mult); }
 /** Sessions line: "Session 3/7 · +$0.20" (or "7/7 sessions" when the day is done). */
 function sesLine(ss, d) { if (!ss || !ss.on) return null;
   if (d.state !== 'trading' || ss.done >= ss.count) return `${ss.done}/${ss.count} sessions · ${ss.won} won`;
   return `Session ${ss.current}/${ss.count} · ${money(ss.pnl, true)}`; }
 /** Uniform view of the bot from /api/status. */
 function botOf(st) {
-  const mu = st.mult, b = st.bot, on = b.running || b.open, pos = mu.position;
-  return { id: 'ats', name: 'ATS bot', running: b.running, open: b.open, on, state: b.state, msg: b.msg, day: mu.day, next: mu.next, params: mu.params, recent: mu.recent || [], ses: mu.sessions, pos,
-    mkt: `${mu.symbol_name} ×${mu.params.m_mult}`,
-    phase: !on ? (b.state === 'halted' ? 'Halted' : 'Idle') : pos ? `${pos.dir === 'up' ? 'Up' : 'Down'} open` : 'Watching' };
+  const v = atsView(st) || {}, b = st.bot, on = b.running || b.open, pos = v.position, classic = !isMultStrat(st);
+  return { id: 'ats', name: 'ATS bot', running: b.running, open: b.open, on, state: b.state, msg: b.msg, day: v.day, next: v.next, params: v.params || {}, recent: v.recent || [], ses: v.sessions, pos, classic, view: v,
+    mkt: classic ? 'V25 (1s) · Rise/Fall 5m' : `${v.symbol_name || 'V25 (1s)'} ×${(v.params && v.params.m_mult) || ''}`,
+    phase: !on ? (b.state === 'halted' ? 'Halted' : 'Idle') : pos ? `${pos.dir === 'up' ? (classic ? 'Rise' : 'Up') : (classic ? 'Fall' : 'Down')} open` : 'Watching' };
 }
 function stateChip(x) { const ds = x.day.state;
   return ds === 'locked' ? ['ok', 'Goal locked'] : ds === 'stopped' ? ['bad', 'Day stopped'] : x.on ? (x.running ? ['acc', 'Running'] : ['warn', 'Stopping']) : x.state === 'halted' ? ['bad', 'Halted'] : ['', 'Stopped']; }
@@ -151,7 +157,10 @@ function renderHome() {
   const paired = R.hasKey(); $('pairCard').hidden = paired && !R.authBad; $('homeMain').hidden = !paired || R.authBad;
   const st = R.st; if (!st) { $('statusTxt').textContent = !paired ? 'Not paired' : R.err ? R.err : 'Connecting…'; $('statusLine').className = 'status-line' + (R.err ? ' err' : ''); return; }
   renderBots(st);
-  const x = botOf(st), d = x.day, on = x.on;
+  const x = botOf(st), d = x.day || {}, on = x.on;
+  if ($('atsName')) $('atsName').textContent = accountName();
+  const hm = $('heroMode');
+  if (hm) { hm.className = 'ats-mode ' + (!st ? 'off' : isReal(st) ? 'real' : 'demo'); hm.textContent = !st ? (R.err ? 'OFFLINE' : 'CONNECTING') : (isReal(st) ? 'REAL' : 'DEMO'); }
   // today + bar
   const pnl = +d.pnl || 0, el = $('dayPnl'); el.textContent = money(pnl, true); el.className = 'big-pnl ' + cls(pnl);
   if (prevPnl != null && pnl !== prevPnl) { el.classList.remove('bump'); void el.offsetWidth; el.classList.add('bump'); } prevPnl = pnl;
@@ -168,7 +177,7 @@ function renderHome() {
   $('dayTrades').textContent = d.trades; $('dayWin').textContent = d.trades ? Math.round(d.wins / d.trades * 100) + '%' : '—';
   const ss = x.ses && x.ses.on ? x.ses : null, sv = ss ? ss.pnl : st.session.pnl;
   $('sesLbl').textContent = ss ? `Session ${Math.min(ss.current, ss.count)}/${ss.count}` : 'Session'; $('sesPnl').textContent = money(sv, true); $('sesPnl').className = cls(sv);
-  const stk = x.pos ? x.pos.stake : x.next ? x.next.stake : x.params.m_stake; $('nextStake').textContent = stk != null ? '$' + (+stk).toFixed(2) : '—';
+  const stk = x.pos ? x.pos.stake : x.next ? x.next.stake : (x.classic ? x.params.stake : x.params.m_stake); $('nextStake').textContent = stk != null ? '$' + (+stk).toFixed(2) : '—';
   $('sesDots').innerHTML = ss ? Array.from({ length: ss.count }, (_, i) => { const lg = ss.log[i]; const c = lg ? (lg.end === 'tp' ? 'w' : lg.pnl > 0 ? 'w' : 'l') : i + 1 === ss.current && d.state === 'trading' ? 'c' : '';
     return `<i class="${c}" title="Session ${i + 1}${lg ? ' ' + money(lg.pnl, true) : ''}"></i>`; }).join('') : '';
   renderPos(st, x);
@@ -183,13 +192,26 @@ function renderHome() {
 const RING = 2 * Math.PI * 28;
 const arrow = d => d === 'up' ? I.up : I.down;
 function renderPos(st, x) {
-  const mu = st.mult, p = x.pos, sg = mu.signal, on = x.on, card = $('posCard'), ring = $('ringFg'); ring.style.strokeDasharray = RING;
-  card.classList.toggle('open', !!p); card.classList.toggle('paused', !on || x.day.state !== 'trading');
+  const v = x.view || atsView(st) || {}, p = x.pos, sg = v.signal, on = x.on, card = $('posCard'), ring = $('ringFg'); ring.style.strokeDasharray = RING;
+  card.classList.toggle('open', !!p); card.classList.toggle('paused', !on || (x.day && x.day.state !== 'trading'));
   card.classList.toggle('is-up', !!(p && p.dir === 'up')); card.classList.toggle('is-dn', !!(p && p.dir === 'down'));
+  if (p && x.classic) {
+    const pl = p.pnl, label = p.dir === 'up' ? 'Rise' : 'Fall';
+    $('posEye').textContent = 'Open contract'; $('posName').innerHTML = `${arrow(p.dir)}${label}`;
+    $('posSub').textContent = `V25 (1s) · 5m · $${(+p.stake).toFixed(2)}`;
+    $('ringBig').textContent = pl == null ? '…' : (pl >= 0 ? '+' : '−') + Math.abs(pl).toFixed(2); $('ringSmall').textContent = 'P/L';
+    const frac = pl == null ? 0 : Math.min(1, Math.abs(pl) / Math.max(0.01, +p.stake * 0.95)); ring.style.strokeDashoffset = RING * (1 - frac);
+    ring.style.stroke = pl == null ? '' : pl >= 0 ? 'var(--green)' : 'var(--red)';
+    $('posBody').innerHTML = `<div class="pos-grid"><div><span class="eyebrow">Entry</span><b>${p.entry != null ? (+p.entry).toLocaleString('en-US', { maximumFractionDigits: 4 }) : '—'}</b></div>
+      <div><span class="eyebrow">Now</span><b>${p.spot != null ? (+p.spot).toLocaleString('en-US', { maximumFractionDigits: 4 }) : '—'}</b></div>
+      <div><span class="eyebrow">P/L</span><b class="${cls(pl)}">${money(pl, true)}</b></div></div>
+      <div class="pos-foot"><span class="muted">Opened ${fmtT(p.t).slice(0, 5)} · settles with the 5m candle</span></div>`;
+    return;
+  }
   if (p) {
     const pl = p.pnl, tp = +p.tp, sl = +p.sl;
     $('posEye').textContent = 'Open position'; $('posName').innerHTML = `${arrow(p.dir)}${p.dir === 'up' ? 'Up' : 'Down'}`;
-    $('posSub').textContent = `${mu.symbol_name} ×${p.mult} · $${(+p.stake).toFixed(2)}${p.conf != null ? ` · ${p.conf}%` : ''}`;
+    $('posSub').textContent = `${v.symbol_name || 'V25 (1s)'} ×${p.mult} · $${(+p.stake).toFixed(2)}${p.conf != null ? ` · ${p.conf}%` : ''}`;
     $('ringBig').textContent = pl == null ? '…' : (pl >= 0 ? '+' : '−') + Math.abs(pl).toFixed(2); $('ringSmall').textContent = 'P/L';
     const frac = pl == null ? 0 : pl >= 0 ? Math.min(1, pl / tp) : Math.min(1, -pl / sl); ring.style.strokeDashoffset = RING * (1 - frac);
     ring.style.stroke = pl == null ? '' : pl >= 0 ? 'var(--green)' : 'var(--red)';
@@ -205,10 +227,21 @@ function renderPos(st, x) {
     return;
   }
   ring.style.stroke = '';
+  if (x.classic) {
+    const conf = sg ? sg.conf : null, skip = v.last_skip;
+    $('posEye').textContent = 'Analysis';
+    $('posName').innerHTML = !sg ? 'Waiting' : sg.dir ? `${arrow(sg.dir)}${sg.dir === 'up' ? 'Rise' : 'Fall'}` : '<span class="muted">Neutral</span>';
+    $('posSub').textContent = sg && sg.tf ? `${sg.tf} candles · V25 (1s)` : '5m / 15m / 2h · V25 (1s)';
+    $('ringBig').textContent = conf == null ? '–' : Math.round(+conf) + '%'; $('ringSmall').textContent = 'CONF';
+    ring.style.strokeDashoffset = RING * (1 - (conf || 0) / 100); card.classList.toggle('ready', !!(sg && sg.dir));
+    const line = sg && sg.dir ? `${sg.dir === 'up' ? 'Rise' : 'Fall'} ${Math.round(+conf)}%` : (skip && skip.why) ? skip.why : 'Waiting for the next 5m candle.';
+    $('posBody').innerHTML = `<div class="rec-line">${esc(line)}${sg && sg.at ? ' · ' + fmtT(sg.at).slice(0, 5) : ''}</div>`;
+    return;
+  }
   const need = sg ? sg.need : +x.params.m_conf, conf = sg ? sg.conf : null, lean = sg && sg.lean;
   $('posEye').textContent = 'Signal';
   $('posName').innerHTML = !sg ? 'Waiting' : sg.dir ? `${arrow(sg.dir)}${sg.dir === 'up' ? 'Up' : 'Down'}` : lean ? `<span class="muted">${lean === 'up' ? 'Leaning up' : 'Leaning down'}</span>` : '<span class="muted">Mixed</span>';
-  $('posSub').textContent = `${mu.symbol_name} ×${x.params.m_mult} · TP $${(+x.params.m_tp).toFixed(2)} / SL $${(+x.params.m_sl).toFixed(2)}`;
+  $('posSub').textContent = `${v.symbol_name || 'V25 (1s)'} ×${x.params.m_mult} · TP $${(+x.params.m_tp).toFixed(2)} / SL $${(+x.params.m_sl).toFixed(2)}`;
   $('ringBig').textContent = conf == null ? '–' : conf + '%'; $('ringSmall').textContent = `NEED ${need}%`;
   ring.style.strokeDashoffset = RING * (1 - (conf || 0) / 100); card.classList.toggle('ready', !!(sg && sg.dir));
   const tfs = sg && sg.tf ? Object.entries(sg.tf) : [];
@@ -225,7 +258,7 @@ function tradeRow(h, fresh) {
   const title = mult ? `${t === 'MULTUP' ? 'Up' : 'Down'} ×${esc(h.mult || '')}` : diff ? `Differs ${esc(h.barrier)}` : ou ? `${t === 'DIGITOVER' ? 'Over 2' : 'Under 7'}${h.step ? ' · step ' + h.step : ''}` : `${t === 'CALL' ? 'Rise' : t === 'PUT' ? 'Fall' : esc(t)}${h.step ? ' · step ' + h.step : ''}`;
   const tags = (h.mode === 'real' ? '<span class="tag real">REAL</span>' : '') + (bot === 'rf1h' ? '<span class="tag">1H</span>' : '') + (h.capped ? '<span class="tag cap">CAPPED</span>' : '') + (h.chain_end === 'bust' ? '<span class="tag bust">CHAIN LOST</span>' : '');
   const mins = h.settled_t && h.t ? Math.max(1, Math.round((h.settled_t - h.t) / 60)) : null;
-  const dur = mult ? (mins ? ` · ${mins >= 60 ? Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm' : mins + 'm'}` : '') : diff || ou ? ' · 1 tick' : bot === 'rf1h' ? ' · 1 hour' : '';
+  const dur = mult ? (mins ? ` · ${mins >= 60 ? Math.floor(mins / 60) + 'h ' + (mins % 60) + 'm' : mins + 'm'}` : '') : diff || ou ? ' · 1 tick' : bot === 'rf1h' ? ' · 1 hour' : (t === 'CALL' || t === 'PUT' ? ' · 5m' : '');
   return `<li${fresh ? ' class="new"' : ''}>${ico}<div class="t-main"><b>${title}${tags}</b><small>${fmtT(h.t)} · $${(+h.stake).toFixed(2)}${dur}</small></div><div class="amt ${set ? cls(h.profit) : 'muted'}">${set ? money(h.profit, true) : h.status === 'open' ? 'Open' : esc(h.status)}<small>${set ? (h.profit > 0 ? 'won' : 'lost') : ''}</small></div></li>`;
 }
 
@@ -239,7 +272,24 @@ function hoursCard(byHour) { const hrs = Array(24).fill(null); for (const h of b
     <div class="hours-axis"><span>00</span><span>06</span><span>12</span><span>18</span><span>23</span></div></div>`; }
 const daysCard = byDay => `<div class="card"><div class="card-h"><h3>Days</h3></div>${byDay.length ? byDay.slice(0, 10).map(x => `<div class="row"><div class="l"><b>${new Date(x.day + 'T12:00:00Z').toLocaleDateString('en-GB', { weekday: 'short', day: 'numeric', month: 'short' })}</b><small>${x.n} trades · ${pct(x.winrate, 0)} won</small></div><div class="r ${cls(x.pnl)}">${money(x.pnl, true)}</div></div>`).join('') : '<p class="empty">No days yet</p>'}</div>`;
 function renderStats() {
-  const s0 = R.stats, el = $('statsBody'); if (!s0 || !s0.mult) { el.innerHTML = '<div class="card"><p class="muted">Loading…</p></div>'; return; }
+  const s0 = R.stats, el = $('statsBody'); const classic = R.st && !isMultStrat(R.st);
+  if (!s0 || !(classic ? s0.classic : s0.mult)) { el.innerHTML = '<div class="card"><p class="muted">Loading…</p></div>'; return; }
+  if (classic) {
+    const c = s0.classic, a = { n: c.trades, wins: c.wins, losses: c.losses, winrate: c.winrate, pnl: c.pnl, avg_win: null, avg_loss: null, avg_mins: 5 };
+    const q = R.st.classic && R.st.classic.quote, be = q && q.up && q.up.payout && q.up.stake ? q.up.stake / q.up.payout : 0.51;
+    const dirRow = (n, x) => !x ? '' : `<div class="row"><div class="l"><b>${n}</b><small>${x.n || x.trades || 0} trades</small></div><div class="r">${x.winrate == null ? '—' : pct(x.winrate, 0)}<small class="${cls(x.pnl)}">${money(x.pnl, true)}</small></div></div>`;
+    el.innerHTML = `
+    <div class="st-grid">
+      <div class="st"><span class="eyebrow">Win rate</span><div class="st-num">${pct(a.winrate)}</div>${meter(a.winrate, be)}<small>${a.n} trades · needs ${pct(be, 0)}+</small></div>
+      <div class="st"><span class="eyebrow">P/L</span><div class="st-num ${cls(a.pnl)}">${money(a.pnl, true)}</div><small>5m Rise/Fall trades</small></div>
+      <div class="st"><span class="eyebrow">Wins / losses</span><div class="st-num">${a.wins}–${a.losses}</div><small>this bot</small></div>
+      <div class="st"><span class="eyebrow">Cycle</span><div class="st-num">5m</div><small>V25 (1s)</small></div>
+    </div>
+    ${sesCard()}
+    ${(() => { const lt = (R.st && R.st.real) || {}; return `<div class="card" style="margin-top:14px"><div class="card-h"><h3>Real lifetime</h3></div>
+      <div class="row"><div class="l"><b>Real P/L</b><small>${lt.lifetime_trades || 0} real trades</small></div><div class="r ${cls(lt.lifetime_pnl)}">${money(lt.lifetime_pnl, true)}</div></div></div>`; })()}`;
+    return;
+  }
   const s = s0.mult, a = s.all, p = (R.st && R.st.mult && R.st.mult.params) || {}; const be = p.m_tp && p.m_sl ? +p.m_sl / (+p.m_tp + +p.m_sl) : 0.5;
   const dirRow = (n, x) => `<div class="row"><div class="l"><b>${n}</b><small>${x.n} trades · ${x.wins}–${x.losses}</small></div><div style="flex:1;max-width:130px">${meter(x.winrate, be)}</div><div class="r">${pct(x.winrate, 0)}<small class="${cls(x.pnl)}">${money(x.pnl, true)}</small></div></div>`;
   el.innerHTML = `
@@ -259,7 +309,7 @@ function renderStats() {
   ${hoursCard((s.by_hour || []).map(x => Object.assign({ hour: +x.key }, x)))}
   ${daysCard((s.by_day || []).map(x => Object.assign({ day: x.key }, x)))}`;
 }
-function sesCard() { const ss = R.st && R.st.mult && R.st.mult.sessions; if (!ss || !ss.on) return '';
+function sesCard() { const v = R.st && atsView(R.st); const ss = v && v.sessions; if (!ss || !ss.on) return '';
   const end = e => e === 'tp' ? 'Take-profit' : e === 'sl' ? 'Stop' : 'Day limit';
   return `<div class="card" style="margin-top:14px"><div class="card-h"><h3>Sessions today</h3><span class="muted">${ss.done}/${ss.count}</span></div>${ss.log.length ? ss.log.map(x => `<div class="row"><div class="l"><b>Session ${x.n}</b><small>${x.trades} trades · ${end(x.end)} · ${fmtT(x.t).slice(0, 5)}</small></div><div class="r ${cls(x.pnl)}">${money(x.pnl, true)}</div></div>`).join('') : '<p class="empty">No sessions finished yet</p>'}</div>`; }
 
@@ -282,6 +332,12 @@ const F = [ // [key, label, hint, type, unit, step, icon class, icon, sessions-o
   ['g', 'Daily limits', [['day_tp', 'Daily lock', '', 'n', '$', 0.5, 'c3', I.lock], ['day_sl', 'Daily stop', '', 'n', '$', 0.5, 'c4', I.shield]]],
   ['g', 'Safety', [['m_max_losses', 'Max losses in a row', '', 'n', '', 1, 'c5', I.x], ['max_stake', 'Max stake', '', 'n', '$', 0.5, 'c5', I.wallet]]],
 ];
+const F_RF = [
+  ['g', 'Trade', [['stake', 'Stake', 'Sized so one win is about +$0.50', 'n', '$', 0.05, 'c1', I.wallet]]],
+  ['g', 'Sessions', [['ses_on', 'Sessions', '', 'b', '', 0, 'c1', I.layers], ['ses_count', 'Sessions per day', '', 'n', '', 1, 'c1', I.layers, 1], ['ses_tp', 'Session target', '', 'n', '$', 0.1, 'c3', I.target, 1], ['ses_sl', 'Session stop', '', 'n', '$', 0.5, 'c4', I.shield, 1], ['ses_pause', 'Pause between', '', 'n', 's', 10, 'c1', I.clock, 1]]],
+  ['g', 'Daily limits', [['day_tp', 'Daily lock', '', 'n', '$', 0.5, 'c3', I.lock], ['day_sl', 'Daily stop', '', 'n', '$', 0.5, 'c4', I.shield]]],
+  ['g', 'Safety', [['max_consec_losses', 'Max losses in a row', '', 'n', '', 1, 'c5', I.x], ['max_stake', 'Max stake', '', 'n', '$', 0.5, 'c5', I.wallet]]],
+];
 let SYMS = {};
 const SELECTS = { side: (H && H.REC_SIDES) || [['auto', 'Auto'], ['over', 'Over 2'], ['under', 'Under 7']],
   get sym() { return Object.entries(SYMS).map(([k, v]) => [k, v.short]); },
@@ -296,13 +352,16 @@ function renderSettings() {
   if (view !== 'settings') return; const st = R.st, el = $('setBody');
   if (!st) { el.innerHTML = '<div class="card"><p class="muted">Connect your server first.</p></div>'; return; }
   SYMS = (st.mult && st.mult.symbols) || SYMS;
-  if (!draft || !dirty) { draft = Object.assign({}, st.mult ? st.mult.params : {}, st.bot.params); gdraft = Object.assign({}, st.global); }
+  if (!draft || !dirty) { draft = Object.assign({}, st.mult ? st.mult.params : {}, st.classic ? st.classic.params : {}, st.bot.params); gdraft = Object.assign({}, st.global); }
   const bx = botOf(st), on = bx.on, anyOn = st.bot.running || st.bot.open, real = st.real, pref = themePref();
-  const obj = draft;
+  const obj = draft, rf = obj.strategy !== 'mult';
   // Safety: the run-level session stop/take-profit are not used in sessions mode
-  const groups = F.map(([g, t, fs]) => [g, t, fs.filter(f => !(f[8] && !obj.ses_on) && !(f[9] && !obj.m_mg))]);
+  const src = rf ? F_RF : F;
+  const groups = src.map(([g, t, fs]) => [g, t, fs.filter(f => !(f[8] && !obj.ses_on) && !(f[9] && !obj.m_mg))]);
   el.innerHTML = `
   ${on ? `<div class="notice">${I.info}<span>Stop ${bx.name} to change its settings.</span></div>` : ''}
+  <div class="group"><div class="group-t">Bot</div><div class="seg" id="stratSeg" style="margin:0">${[['classic', 'Rise/Fall 5m'], ['mult', 'Multipliers']].map(([k, l]) => `<button type="button" data-s="${k}" class="${(rf ? 'classic' : 'mult') === k ? 'on' : ''}"${on ? ' disabled' : ''}>${l}</button>`).join('')}</div>
+    <p class="note" style="margin:8px 6px 0">Only one bot trades. Settings for both are kept.</p></div>
   ${groups.map(([, t, fs]) => `<div class="group"><div class="group-t">${t}</div><div class="list" data-bot-list>${fs.map(f => fieldHtml(obj, f)).join('')}</div></div>`).join('')}
   <div class="group"><div class="group-t">Account limits</div><div class="list">
     <div class="item"><span class="ic c4">${I.shield}</span><div class="lab"><b>Stop at loss</b></div><span class="unit">$</span><input type="number" inputmode="decimal" step="0.5" data-g="sl" value="${gdraft.sl}"></div>
@@ -327,6 +386,7 @@ function renderSettings() {
   el.querySelectorAll('[data-k]').forEach(inp => inp.oninput = inp.onchange = () => { const k = inp.dataset.k; obj[k] = inp.type === 'checkbox' ? inp.checked : inp.tagName === 'SELECT' ? (inp.dataset.num ? +inp.value : inp.value) : inp.value === '' ? '' : +inp.value;
     if (k === 'm_symbol' && SYMS[obj.m_symbol] && !SYMS[obj.m_symbol].mults.includes(+obj.m_mult)) obj.m_mult = SYMS[obj.m_symbol].mults[0];
     markDirty(); if (k === 'ses_on' || k === 'm_mg' || k === 'm_symbol') renderSettings(); });
+  el.querySelectorAll('#stratSeg button').forEach(b => b.onclick = () => { if (on || b.classList.contains('on')) return; obj.strategy = b.dataset.s; markDirty(); renderSettings(); });
   el.querySelectorAll('[data-g]').forEach(inp => inp.oninput = () => { gdraft[inp.dataset.g] = +inp.value; markDirty(); });
   el.querySelectorAll('[data-bot-list] input,[data-bot-list] select').forEach(x => { if (on) x.disabled = true; });
   el.querySelectorAll('#themeSeg button').forEach(b => b.onclick = () => setTheme(b.dataset.t));
@@ -334,7 +394,7 @@ function renderSettings() {
   if (q('saveSet')) q('saveSet').onclick = async () => { try {
     const g = st.global; if (gdraft.sl !== g.sl || gdraft.tp !== g.tp) await R.saveGlobal(gdraft);
     const same = (a, b) => Object.keys(a).every(k => a[k] === b[k]);
-    const cur = Object.assign({}, st.mult ? st.mult.params : {}, st.bot.params); if (!same(draft, cur)) await R.saveParams(Object.assign({}, draft, { strategy: 'mult' }));
+    const cur = Object.assign({}, st.mult ? st.mult.params : {}, st.classic ? st.classic.params : {}, st.bot.params); if (!same(draft, cur)) await R.saveParams(Object.assign({}, draft, { strategy: draft.strategy === 'mult' ? 'mult' : 'classic' }));
     dirty = false; toast({ level: 'win', title: 'Saved' }); renderSettings(); } catch (e) { errToast(e); } };
   if (q('discard')) q('discard').onclick = () => { dirty = false; renderSettings(); };
   q('newSess').onclick = async () => { if (await ask({ title: 'New session?', text: 'Session P/L goes back to $0.', ok: 'Start' })) R.newSession().then(() => toast({ level: 'info', title: 'New session' }), errToast); };
@@ -399,6 +459,7 @@ $('pairInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('pair
 /* ---------- render loop ---------- */
 function render() { renderHeader(); if (view === 'mt5') { if (window.ATSMT5) window.ATSMT5.render(); } else if (view === 'home') renderHome(); else if (view === 'stats') renderStats(); else if (view === 'history') renderHistory(); else renderSettings(); }
 R.on(() => { pumpEvents(R.st); if (view === 'settings' && dirty) { renderHeader(); return; } if (view === 'settings' && document.activeElement && document.activeElement.closest && document.activeElement.closest('#setBody')) { renderHeader(); return; } render(); });
+if ($('atsNameEdit')) $('atsNameEdit').onclick = editName;
 window.ATSApp = { go, toast, render, setTheme, openAccount, ask };
 render(); R.kick();
 })();

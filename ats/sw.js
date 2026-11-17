@@ -1,7 +1,7 @@
-/* ATS service worker v13: network-first for the app shell (HTML/JS/CSS),
+/* ATS service worker v14: network-first for the app shell (HTML/JS/CSS),
  * so the phone always picks up a new version. Never caches trading/market traffic
  * (WebSockets and api.derivws.com are cross-origin and pass straight through). */
-const CACHE = 'ats-shell-v13';
+const CACHE = 'ats-shell-v14';
 const SHELL = ['./', './index.html', './style.css', './app.js', './remote.js', './mt5.js', './shared/ats-engine.js', './shared/hybrid.js',
   './manifest.json', './icons/icon-192.png', './icons/icon-512.png', './icons/icon-192-maskable.png', './icons/icon-512-maskable.png', './icons/apple-touch-icon.png'];
 const FRESH = /\.(html|js|css)$/;

@@ -106,46 +106,122 @@
     }
     if (p.cycle === 'ticks') { if (!(+p.ticks >= TICKS[0] && +p.ticks <= TICKS[1] && Number.isInteger(+p.ticks))) errs.push(`Ticks must be ${TICKS[0]}–${TICKS[1]}`); }
     else { const s = cycleSec(p); if (!s || s < 60 || s > 86400 || s % 60) errs.push('Cycle must be 1 minute to 1 day (whole minutes)'); }
+    if (p.ses_on) {
+      num('ses_count', 1, 50, 'Sessions per day'); if (!Number.isInteger(+p.ses_count)) errs.push('Sessions per day must be a whole number');
+      num('ses_tp', 0.01, 1000, 'Session target'); num('ses_sl', 0.01, 1000, 'Session stop'); num('ses_pause', 0, 3600, 'Pause between sessions');
+      num('day_tp', 0.01, 1000, 'Daily profit lock'); num('day_sl', 0.01, 1000, 'Daily stop');
+      if (+p.stake > +p.ses_sl) errs.push('Stake is larger than the session stop');
+      if (+p.stake > +p.day_sl) errs.push('Stake is larger than the daily stop');
+    }
     return errs;
   }
+  /** Effective params for the 5-minute Rise/Fall ATS bot (sessions on, martingale off). */
+  function classicParams(p) {
+    const d = { stake: 0.55, cycle: '5m', custom_n: 10, custom_u: 'm', ticks: 5, align: true, direction: 'analysis',
+      martingale: false, mg_factor: 2.1, mg_max_steps: 3, mg_reset_win: true,
+      session_sl: 6, session_tp: 3, max_consec_losses: 8, max_stake: 3.5, strategy: 'classic',
+      ses_on: true, ses_count: 7, ses_tp: 0.5, ses_sl: 2, ses_pause: 60, day_tp: 3.5, day_sl: 4 };
+    return Object.assign({}, d, p, { strategy: 'classic' });
+  }
+  const dayKey = ep => new Date((ep + 10800) * 1000).toISOString().slice(0, 10); // UTC+3 trading day
+  const nextMidnight = ep => { const t = ep + 10800; return (Math.floor(t / 86400) + 1) * 86400 - 10800; };
 
-  /** Martingale + risk state for one bot run. Never returns a stake that could break a limit. */
+  /** Martingale + risk state for one bot run. Never returns a stake that could break a limit.
+   *  When p.ses_on, the 7-session day engine is used (ses_tp / ses_sl per session, day_tp / day_sl, pause);
+   *  the run-level session_tp / session_sl are ignored. */
   class BotRun {
-    constructor(params) {
+    constructor(params, t) {
       this.p = Object.assign({}, params);
       this.step = 0; this.pnl = 0; this.trades = 0; this.wins = 0; this.losses = 0; this.consecLosses = 0;
       this.haltReason = null; this.lastStake = null;
+      t = t || Math.floor(Date.now() / 1000);
+      this.day = dayKey(t); this.dayPnl = 0; this.dayTrades = 0; this.dayWins = 0; this.dayState = 'trading'; this.dayReason = null;
+      this.ses = 1; this.sesPnl = 0; this.sesTrades = 0; this.sesUntil = 0; this.sesLog = [];
     }
+    static from(o, p, t) { const r = new BotRun(p, t); Object.assign(r, o || {}); r.p = Object.assign({}, p); if (!Array.isArray(r.sesLog)) r.sesLog = []; return r; }
+    roll(t) { const d = dayKey(t); if (d === this.day) return false;
+      Object.assign(this, { day: d, dayPnl: 0, dayTrades: 0, dayWins: 0, dayState: 'trading', dayReason: null, step: 0, ses: 1, sesPnl: 0, sesTrades: 0, sesUntil: 0, sesLog: [], consecLosses: 0 }); return true; }
+    resetDay(t) { Object.assign(this, { day: dayKey(t || Math.floor(Date.now() / 1000)), dayPnl: 0, dayTrades: 0, dayWins: 0, dayState: 'trading', dayReason: null, step: 0, ses: 1, sesPnl: 0, sesTrades: 0, sesUntil: 0, sesLog: [], consecLosses: 0 }); return this; }
+    dayCheck() { if (!this.p.ses_on) return false; const p = this.p;
+      if (this.dayPnl >= +p.day_tp - 1e-9) { this.dayState = 'locked'; this.dayReason = `Daily +$${(+p.day_tp).toFixed(2)} lock reached`; }
+      else if (this.dayPnl <= -p.day_sl + 1e-9) { this.dayState = 'stopped'; this.dayReason = `Daily −$${(+p.day_sl).toFixed(2)} stop reached`; }
+      else if (this.sesLog.length >= +p.ses_count) { this.dayState = 'locked'; this.dayReason = `All ${+p.ses_count} sessions done`; }
+      return this.dayState !== 'trading'; }
     stakeForStep(step) { const p = this.p; return roundStake(+p.stake * Math.pow(p.martingale ? +p.mg_factor : 1, step)); }
-    /** Stake for the next contract, or null (and haltReason set) if any limit forbids trading. */
+    /** Stake for the next contract, or null (and haltReason set) if any limit forbids trading. Sessions mode: use next(). */
     nextStake() {
       if (this.haltReason) return null;
       if (this.check()) return null;
       const p = this.p, s = this.stakeForStep(this.step);
       if (s > +p.max_stake + 1e-9) return this.halt(`Next stake $${s.toFixed(2)} would exceed the $${(+p.max_stake).toFixed(2)} cap`);
       // a full loss on the next trade must not push past the session stop-loss
-      if (this.pnl - s < -p.session_sl - 1e-9) return this.halt(`Next stake $${s.toFixed(2)} could break the $${(+p.session_sl).toFixed(2)} session stop-loss`);
+      if (!p.ses_on && this.pnl - s < -p.session_sl - 1e-9) return this.halt(`Next stake $${s.toFixed(2)} could break the $${(+p.session_sl).toFixed(2)} session stop-loss`);
       this.lastStake = s; return s;
     }
-    /** Record a settled contract. profit is signed $ (sell − buy). */
-    onResult(profit) {
-      profit = +profit || 0; this.trades++; this.pnl = r2(this.pnl + profit);
-      if (profit > 0) { this.wins++; this.consecLosses = 0; if (this.p.martingale) this.step = this.p.mg_reset_win ? 0 : Math.max(0, this.step - 1); }
-      else { this.losses++; this.consecLosses++; if (this.p.martingale) this.step++; }
-      return this.check();
+    /** Sessions/day-aware next trade: {stake, step} | {wait:'day'|'session', until, reason, state} | {halt}. */
+    next(t, extraRoom) {
+      t = t || Math.floor(Date.now() / 1000);
+      if (!this.p.ses_on) { const s = this.nextStake(); return s == null ? { halt: this.haltReason } : { stake: s, step: this.step }; }
+      this.roll(t); if (this.checkLosses()) return { halt: this.haltReason };
+      if (this.dayState !== 'trading' || this.dayCheck()) return { wait: 'day', until: nextMidnight(t), reason: this.dayReason, state: this.dayState };
+      const p = this.p;
+      if (this.sesUntil > t) return { wait: 'session', until: this.sesUntil, state: 'pause', reason: `Session ${this.ses}/${+p.ses_count} starts soon` };
+      const s = this.stakeForStep(this.step);
+      if (s > +p.max_stake + 1e-9) return this.halt(`Next stake $${s.toFixed(2)} would exceed the $${(+p.max_stake).toFixed(2)} cap`) || { halt: this.haltReason };
+      const dayRoom = r2(+p.day_sl + this.dayPnl), sesRoom = r2(+p.ses_sl + this.sesPnl);
+      const outRoom = extraRoom == null ? Infinity : r2(extraRoom); const room = Math.min(dayRoom, sesRoom, outRoom);
+      if (s > room + 1e-9) {
+        if (dayRoom <= sesRoom && dayRoom <= outRoom) return this.dayStopEarly(t, s);
+        if (sesRoom <= outRoom) return this.sesStopEarly(t);
+        return this.halt(`Next stake $${s.toFixed(2)} could break a limit`) || { halt: this.haltReason };
+      }
+      this.lastStake = s; return { stake: s, step: this.step };
+    }
+    endSession(t, end) { const p = this.p; this.sesLog.push({ n: this.ses, pnl: this.sesPnl, trades: this.sesTrades, end, t });
+      Object.assign(this, { ses: this.ses + 1, sesPnl: 0, sesTrades: 0, consecLosses: 0, step: 0, sesUntil: t + Math.max(0, +p.ses_pause || 0) }); return this.dayCheck(); }
+    sesStopEarly(t) { this.endSession(t, 'sl');
+      if (this.dayState !== 'trading') return { wait: 'day', until: nextMidnight(t), reason: this.dayReason, state: this.dayState };
+      return { wait: 'session', until: this.sesUntil, state: 'pause', reason: `Session ${this.ses}/${+this.p.ses_count} starts soon` }; }
+    dayStopEarly(t, s) { this.dayState = 'stopped'; this.dayReason = `Daily stop: a $${s.toFixed(2)} trade could break the −$${(+this.p.day_sl).toFixed(2)} stop`;
+      return { wait: 'day', until: nextMidnight(t), reason: this.dayReason, state: 'stopped' }; }
+    /** Record a settled contract. profit is signed $ (sell − buy). Optional t for sessions mode. */
+    onResult(profit, t) {
+      profit = +profit || 0; t = t || Math.floor(Date.now() / 1000); const p = this.p;
+      if (p.ses_on) { this.sesPnl = r2(this.sesPnl + profit); this.sesTrades++; this.dayTrades++; this.dayPnl = r2(this.dayPnl + profit); if (profit > 0) this.dayWins++; }
+      this.trades++; this.pnl = r2(this.pnl + profit);
+      if (profit > 0) { this.wins++; this.consecLosses = 0; if (p.martingale) this.step = p.mg_reset_win ? 0 : Math.max(0, this.step - 1); }
+      else { this.losses++; this.consecLosses++; if (p.martingale) this.step++; }
+      if (!p.ses_on) return this.check();
+      const wasTrading = this.dayState === 'trading'; this.dayCheck();
+      const dayHit = wasTrading && this.dayState !== 'trading' ? this.dayState : null; let sesHit = null;
+      const done = { n: this.ses, pnl: this.sesPnl };
+      const end = dayHit ? 'day' : this.sesPnl >= +p.ses_tp - 1e-9 ? 'tp' : this.sesPnl <= -p.ses_sl + 1e-9 ? 'sl' : null;
+      if (end) { this.endSession(t, end); sesHit = Object.assign(done, { end }); }
+      const dayHit2 = dayHit || (wasTrading && this.dayState !== 'trading' ? this.dayState : null);
+      if (dayHit2) this.step = 0;
+      this.checkLosses();
+      return { halt: this.haltReason, win: profit > 0, profit, sesHit, dayHit: dayHit2, step: this.step };
+    }
+    checkLosses() {
+      const p = this.p; const stop = r => { this.halt(r); return this.haltReason; };
+      if (this.haltReason) return this.haltReason;
+      if (this.consecLosses >= p.max_consec_losses) return stop(`${this.consecLosses} losses in a row (max ${p.max_consec_losses})`);
+      if (p.martingale && this.step > p.mg_max_steps) return stop(`Martingale max steps (${p.mg_max_steps}) used up`);
+      return null;
     }
     /** Returns the halt reason if any limit is reached (and records it), else null. */
     check() {
       const p = this.p; const stop = r => { this.halt(r); return this.haltReason; };
       if (this.haltReason) return this.haltReason;
-      if (this.pnl <= -p.session_sl + 1e-9) return stop(`Session stop-loss hit (${fmt(this.pnl)})`);
-      if (this.pnl >= +p.session_tp - 1e-9) return stop(`Take-profit reached (${fmt(this.pnl)})`);
-      if (this.consecLosses >= p.max_consec_losses) return stop(`${this.consecLosses} losses in a row (max ${p.max_consec_losses})`);
-      if (p.martingale && this.step > p.mg_max_steps) return stop(`Martingale max steps (${p.mg_max_steps}) used up`);
-      return null;
+      if (!p.ses_on) {
+        if (this.pnl <= -p.session_sl + 1e-9) return stop(`Session stop-loss hit (${fmt(this.pnl)})`);
+        if (this.pnl >= +p.session_tp - 1e-9) return stop(`Take-profit reached (${fmt(this.pnl)})`);
+      }
+      return this.checkLosses();
     }
     halt(reason) { if (!this.haltReason) this.haltReason = reason; return null; }
-    snapshot() { return { step: this.step, pnl: this.pnl, trades: this.trades, wins: this.wins, losses: this.losses, consecLosses: this.consecLosses, haltReason: this.haltReason, nextStake: this.haltReason ? null : this.stakeForStep(this.step) }; }
+    snapshot() { const o = { step: this.step, pnl: this.pnl, trades: this.trades, wins: this.wins, losses: this.losses, consecLosses: this.consecLosses, haltReason: this.haltReason, nextStake: this.haltReason ? null : this.stakeForStep(this.step) };
+      for (const k of ['day', 'dayPnl', 'dayTrades', 'dayWins', 'dayState', 'dayReason', 'ses', 'sesPnl', 'sesTrades', 'sesUntil', 'sesLog']) o[k] = this[k]; return o; }
   }
   const fmt = x => (x >= 0 ? '+$' : '−$') + Math.abs(x).toFixed(2);
 
@@ -164,7 +240,7 @@
     return req;
   }
 
-  const api = { SYMBOL, SYMBOL_NAME, MIN_STAKE, BOT, BOT_TYPES, STRATEGIES, modelParams, TICKS, CYCLES, CYCLE_OPTS, cycleSec, cycleDuration, cycleLabel, graceSec, alignPlan, analysisTFs, gLabel, GRANS,
-    roundStake, stakeLadder, validateParams, BotRun, statsOf, buildProposal, r2 };
+  const api = { SYMBOL, SYMBOL_NAME, MIN_STAKE, BOT, BOT_TYPES, STRATEGIES, modelParams, classicParams, TICKS, CYCLES, CYCLE_OPTS, cycleSec, cycleDuration, cycleLabel, graceSec, alignPlan, analysisTFs, gLabel, GRANS,
+    dayKey, nextMidnight, roundStake, stakeLadder, validateParams, BotRun, statsOf, buildProposal, r2 };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.ATSEngine = api;
 })(typeof window !== 'undefined' ? window : globalThis);

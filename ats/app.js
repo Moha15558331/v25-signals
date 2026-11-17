@@ -1,7 +1,7 @@
-/* ATS v4.5 app: remote control + dashboard for the server bot (5m Rise/Fall, Multipliers toggle). Views: Home, Stats, History, Settings. */
+/* ATS v4.6 app: remote control + dashboard for the 5-minute Rise/Fall bot and the MT5 panel. Views: Home, MT5, Stats, History, Settings. */
 (() => {
 'use strict';
-const APP_VER = '4.5.0';
+const APP_VER = '4.6.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -125,7 +125,7 @@ const NAME_KEY = 'ats.name';
 function accountName() { try { const n = localStorage.getItem(NAME_KEY); if (n) return n; } catch (e) { } return 'Trader'; }
 function editName() { const cur = accountName(); const n = prompt('Your name for the welcome screen (stored only on this phone). The Deriv API does not share your account name.', cur === 'Trader' ? '' : cur);
   if (n == null) return; try { n.trim() ? localStorage.setItem(NAME_KEY, n.trim().slice(0, 40)) : localStorage.removeItem(NAME_KEY); } catch (e) { } if ($('atsName')) $('atsName').textContent = accountName(); }
-function isMultStrat(st) { return !!(st && st.bot && st.bot.strategy === 'mult'); }
+function isMultStrat(st) { return false; } // v4.6: Multipliers is hidden; only 5m Rise/Fall runs
 function atsView(st) { return isMultStrat(st) ? st.mult : (st.classic || st.mult); }
 /** Sessions line: "Session 3/7 · +$0.20" (or "7/7 sessions" when the day is done). */
 function sesLine(ss, d) { if (!ss || !ss.on) return null;
@@ -222,8 +222,7 @@ function renderPos(st, x) {
       <div><span class="eyebrow">P/L</span><b class="${cls(pl)}">${money(pl, true)}</b></div></div>
       <div class="pbar sm"><div class="pbar-track"><div class="pbar-neg" style="flex:${sl}"></div><div class="pbar-pos" style="flex:${tp}"></div><div class="pbar-fill ${pl >= 0 ? 'pos' : 'neg'}" style="${fill}"></div><i class="pbar-zero" style="left:calc(${z}% - 1px)"></i></div>
       <div class="pbar-lbl"><span>SL −$${sl.toFixed(2)}${p.capped ? ' · capped' : ''}</span><span style="left:${z}%">$0</span><span>TP +$${tp.toFixed(2)}</span></div></div>
-      <div class="pos-foot"><span class="muted">Opened ${fmtT(p.t).slice(0, 5)}</span><button type="button" class="link dn" id="closePos"${R.busy ? ' disabled' : ''}>Close now</button></div>`;
-    const cb = $('closePos'); if (cb) cb.onclick = closePos;
+      <div class="pos-foot"><span class="muted">Opened ${fmtT(p.t).slice(0, 5)}</span></div>`;
     return;
   }
   ring.style.stroke = '';
@@ -354,14 +353,13 @@ function renderSettings() {
   SYMS = (st.mult && st.mult.symbols) || SYMS;
   if (!draft || !dirty) { draft = Object.assign({}, st.mult ? st.mult.params : {}, st.classic ? st.classic.params : {}, st.bot.params); gdraft = Object.assign({}, st.global); }
   const bx = botOf(st), on = bx.on, anyOn = st.bot.running || st.bot.open, real = st.real, pref = themePref();
-  const obj = draft, rf = obj.strategy !== 'mult';
+  const obj = draft; obj.strategy = 'classic';
   // Safety: the run-level session stop/take-profit are not used in sessions mode
-  const src = rf ? F_RF : F;
+  const src = F_RF;
   const groups = src.map(([g, t, fs]) => [g, t, fs.filter(f => !(f[8] && !obj.ses_on) && !(f[9] && !obj.m_mg))]);
   el.innerHTML = `
   ${on ? `<div class="notice">${I.info}<span>Stop ${bx.name} to change its settings.</span></div>` : ''}
-  <div class="group"><div class="group-t">Bot</div><div class="seg" id="stratSeg" style="margin:0">${[['classic', 'Rise/Fall 5m'], ['mult', 'Multipliers']].map(([k, l]) => `<button type="button" data-s="${k}" class="${(rf ? 'classic' : 'mult') === k ? 'on' : ''}"${on ? ' disabled' : ''}>${l}</button>`).join('')}</div>
-    <p class="note" style="margin:8px 6px 0">Only one bot trades. Settings for both are kept.</p></div>
+  <div class="group"><div class="group-t">Bot</div><p class="note" style="margin:4px 6px 0">ATS bot · Rise/Fall 5m on Volatility 25 (1s).</p></div>
   ${groups.map(([, t, fs]) => `<div class="group"><div class="group-t">${t}</div><div class="list" data-bot-list>${fs.map(f => fieldHtml(obj, f)).join('')}</div></div>`).join('')}
   <div class="group"><div class="group-t">Account limits</div><div class="list">
     <div class="item"><span class="ic c4">${I.shield}</span><div class="lab"><b>Stop at loss</b></div><span class="unit">$</span><input type="number" inputmode="decimal" step="0.5" data-g="sl" value="${gdraft.sl}"></div>
@@ -372,7 +370,7 @@ function renderSettings() {
   <div class="group"><div class="group-t">Real money</div><div class="list">
     <div class="item"><span class="ic c6">${I.shield}</span><div class="lab"><b>Lifetime loss cap</b><small>${capOn(real) ? `${money(real.lifetime_lost)} lost · ${money(real.room_left)} left` : 'Off'}</small></div><label class="switch"><input type="checkbox" id="capOn"${capOn(real) ? ' checked' : ''}><span></span></label></div>
     ${capOn(real) ? `<div class="item"><span class="ic c6">${I.wallet}</span><div class="lab"><b>Cap amount</b></div><span class="unit">$</span><input type="number" inputmode="decimal" step="1" min="1" id="capIn" value="${real.lifetime_cap}"></div>` : ''}</div>
-    <p class="note" style="margin:8px 6px 0">Real runs the ATS bot only.</p></div>
+    <p class="note" style="margin:8px 6px 0">Real runs the 5-minute Rise/Fall bot only.</p></div>
   ${isReal(st) ? '' : `<div class="group"><div class="group-t">Demo tools</div><div class="list">
     <div class="item"><span class="ic c3">${I.refresh}</span><div class="lab"><b>Reset today</b></div><button type="button" class="link" id="resetTodaySet">Reset</button></div>
     <div class="item"><span class="ic c6">${I.refresh}</span><div class="lab"><b>Reset demo balance</b></div><button type="button" class="link" id="resetDemo">Reset</button></div>
@@ -384,9 +382,7 @@ function renderSettings() {
   <p class="note">ATS v${APP_VER}</p>
   ${dirty ? `<div class="save-bar"><button type="button" class="btn ghost" id="discard">Discard</button><button type="button" class="btn primary" id="saveSet">Save changes</button></div>` : ''}`;
   el.querySelectorAll('[data-k]').forEach(inp => inp.oninput = inp.onchange = () => { const k = inp.dataset.k; obj[k] = inp.type === 'checkbox' ? inp.checked : inp.tagName === 'SELECT' ? (inp.dataset.num ? +inp.value : inp.value) : inp.value === '' ? '' : +inp.value;
-    if (k === 'm_symbol' && SYMS[obj.m_symbol] && !SYMS[obj.m_symbol].mults.includes(+obj.m_mult)) obj.m_mult = SYMS[obj.m_symbol].mults[0];
-    markDirty(); if (k === 'ses_on' || k === 'm_mg' || k === 'm_symbol') renderSettings(); });
-  el.querySelectorAll('#stratSeg button').forEach(b => b.onclick = () => { if (on || b.classList.contains('on')) return; obj.strategy = b.dataset.s; markDirty(); renderSettings(); });
+    markDirty(); if (k === 'ses_on') renderSettings(); });
   el.querySelectorAll('[data-g]').forEach(inp => inp.oninput = () => { gdraft[inp.dataset.g] = +inp.value; markDirty(); });
   el.querySelectorAll('[data-bot-list] input,[data-bot-list] select').forEach(x => { if (on) x.disabled = true; });
   el.querySelectorAll('#themeSeg button').forEach(b => b.onclick = () => setTheme(b.dataset.t));
@@ -394,7 +390,7 @@ function renderSettings() {
   if (q('saveSet')) q('saveSet').onclick = async () => { try {
     const g = st.global; if (gdraft.sl !== g.sl || gdraft.tp !== g.tp) await R.saveGlobal(gdraft);
     const same = (a, b) => Object.keys(a).every(k => a[k] === b[k]);
-    const cur = Object.assign({}, st.mult ? st.mult.params : {}, st.classic ? st.classic.params : {}, st.bot.params); if (!same(draft, cur)) await R.saveParams(Object.assign({}, draft, { strategy: draft.strategy === 'mult' ? 'mult' : 'classic' }));
+    const cur = Object.assign({}, st.classic ? st.classic.params : {}, st.bot.params); if (!same(draft, cur)) await R.saveParams(Object.assign({}, draft, { strategy: 'classic' }));
     dirty = false; toast({ level: 'win', title: 'Saved' }); renderSettings(); } catch (e) { errToast(e); } };
   if (q('discard')) q('discard').onclick = () => { dirty = false; renderSettings(); };
   q('newSess').onclick = async () => { if (await ask({ title: 'New session?', text: 'Session P/L goes back to $0.', ok: 'Start' })) R.newSession().then(() => toast({ level: 'info', title: 'New session' }), errToast); };

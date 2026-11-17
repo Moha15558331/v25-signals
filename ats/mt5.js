@@ -1,5 +1,5 @@
 /* ATS MT5 tab: read-only dashboard of the ATS_V25 Expert Advisor running in MetaTrader 5 (Deriv-Demo, V25 (1s) CFD) on the server.
- * Data: GET /api/mt5 (same server key). Controls: POST /api/mt5/control {state:'run'|'stop'}, POST /api/mt5/close. DEMO ONLY. */
+ * Data: GET /api/mt5 (same server key). Controls: POST /api/mt5/control, /api/mt5/close, /api/mt5/day/reset, /api/mt5/history/clear. DEMO ONLY. */
 (() => {
 'use strict';
 const $ = id => document.getElementById(id);
@@ -26,6 +26,17 @@ async function toggle() { const e = M.d && M.d.ea; const running = M.d && M.d.co
   else act('/api/mt5/control', { state: 'run' }, 'MT5 bot started'); }
 async function closeNow() { const A = window.ATSApp; const ok = A && A.ask ? await A.ask({ title: 'Close the MT5 trade now?', text: 'It closes at the current price, win or lose.', ok: 'Close now', danger: true }) : confirm('Close now?');
   if (ok) act('/api/mt5/close', {}, 'Close sent'); }
+function isDemo() { const a = M.d && M.d.ea && M.d.ea.account; return !!(a && a.demo); }
+async function resetToday() { const A = window.ATSApp;
+  if (!isDemo()) { if (A && A.toast) A.toast({ level: 'error', title: 'Reset today is only available on demo' }); return; }
+  if (!(A && A.ask ? await A.ask({ title: 'Reset today?', text: 'Today’s P/L goes back to $0. History is kept. The Deriv statement is not changed.', ok: 'Reset' }) : confirm('Reset today?'))) return;
+  act('/api/mt5/day/reset', {}, 'Today reset'); }
+async function clearHist() { const A = window.ATSApp;
+  if (!isDemo()) { if (A && A.toast) A.toast({ level: 'error', title: 'Clear history is only available on demo' }); return; }
+  const run = M.d && M.d.control === 'run', open = M.d && M.d.ea && M.d.ea.position;
+  if (run || open) { if (A && A.toast) A.toast({ level: 'error', title: open ? 'Close or wait for the open trade first' : 'Stop the MT5 bot first' }); return; }
+  if (!(A && A.ask ? await A.ask({ title: 'Clear history?', text: 'MT5 trades disappear from this app. Today’s P/L is also reset. This can’t be undone. The Deriv account statement is not changed.', ok: 'Clear', danger: true }) : confirm('Clear MT5 history in the app?'))) return;
+  act('/api/mt5/history/clear', {}, 'History cleared'); }
 function render() {
   const box = $('mt5Body'); if (!box || !M.on) return;
   if (!M.d) { box.innerHTML = `<div class="card"><p class="muted">${esc(M.err || 'Loading…')}</p></div>`; return; }
@@ -48,7 +59,7 @@ function render() {
   box.innerHTML = `
     <div class="card mt5-hero">
       <div class="hero-top"><div><span class="eyebrow">Today · V25 (1s) CFD</span><div class="big-pnl ${cls(t.pnl)}">${money(t.pnl, true)}</div><div class="sub">${esc(e.reason || '')}</div></div>
-        <div class="hero-side"><span class="chip ${stCls}">${esc(stTxt)}</span><span class="chip">${a.demo ? 'DEMO' : '—'}</span></div></div>
+        <div class="hero-side"><span class="chip ${stCls}">${esc(stTxt)}</span><span class="chip">${a.demo ? 'DEMO' : '—'}</span>${a.demo ? '<button type="button" class="link" id="mt5ResetToday">Reset today</button>' : ''}</div></div>
       <div class="pbar"><div class="pbar-track"><div class="pbar-neg" style="flex:${stop}"></div><div class="pbar-pos" style="flex:${lock}"></div><div class="pbar-fill ${pn >= 0 ? 'pos' : 'neg'}" style="left:${fl}%;width:${fw}%"></div><i class="pbar-zero" style="left:calc(${z}% - 1px)"></i><i class="pbar-knob${pn > 0 ? ' pos' : pn < 0 ? ' neg' : ''}" style="left:${pn >= 0 ? z + fw : z - fw}%"></i></div>
         <div class="pbar-lbl"><span>−$${stop.toFixed(2)} stop</span><span style="left:${z}%">$0</span><span>+$${lock.toFixed(2)} lock</span></div></div>
       <div class="hero-stats"><div><span class="eyebrow">Trades</span><b>${t.trades || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${t.trades ? Math.round(t.wins / t.trades * 100) + '%' : '—'}</b></div>
@@ -58,7 +69,7 @@ function render() {
     </div>
     ${pos}
     <div class="card"><div class="card-h"><h3>Signal</h3><span class="muted">29 votes</span></div>${sig}</div>
-    <div class="card"><div class="card-h"><h3>Recent MT5 trades</h3></div><ul class="trades">${tr || '<li class="empty">No trades yet</li>'}</ul></div>
+    <div class="card"><div class="card-h"><h3>Recent MT5 trades</h3>${a.demo ? '<button type="button" class="link" id="mt5ClearHist">Clear history</button>' : ''}</div><ul class="trades">${tr || '<li class="empty">No trades yet</li>'}</ul></div>
     <div class="card"><div class="card-h"><h3>Account &amp; setup</h3></div>
       <div class="kv"><span>Account</span><b>${esc(a.login)} · ${esc(a.server)}</b></div>
       <div class="kv"><span>Balance / equity</span><b>${money(a.balance)} / ${money(a.equity)}</b></div>
@@ -70,6 +81,7 @@ function render() {
       <div class="kv"><span>Heartbeat</span><b>${d.age_s != null ? d.age_s + 's ago' : '—'}</b></div>
       <p class="muted mt5-note">Backtest: about −$0.38 a trade. The spread alone costs $0.35, so this is for testing on demo only.</p></div>`;
   const tg = $('mt5Toggle'); if (tg) tg.onclick = toggle; const cl = $('mt5Close'); if (cl) cl.onclick = closeNow;
+  const rt = $('mt5ResetToday'); if (rt) rt.onclick = resetToday; const ch = $('mt5ClearHist'); if (ch) ch.onclick = clearHist;
 }
 document.addEventListener('visibilitychange', () => { if (!document.hidden && M.on) loop(); });
 window.ATSMT5 = { show, render, load };

@@ -1,4 +1,4 @@
-/* ATS v4.6.0 — restrained fintech UI. Two themes share one token set. */
+/* ATS v4.7.0 — restrained fintech UI. Two themes share one token set. */
 :root{
   --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Inter","Segoe UI",Roboto,system-ui,sans-serif;
   --r-xl:16px;--r-lg:12px;--r-md:10px;--r-sm:8px;
@@ -373,3 +373,8 @@ main{position:relative;z-index:1;width:100%;max-width:var(--shell);margin:0 auto
 .mt5-tf span b{display:block;font-size:13px;color:var(--text);font-variant-numeric:tabular-nums}
 .mt5-tf span.up b{color:var(--green)}.mt5-tf span.dn b{color:var(--red)}
 .mt5-note{font-size:12px;margin:10px 0 0}
+.mt5-err{margin:0 0 12px}
+.notice.bad{background:var(--red-soft);color:var(--red);border:1px solid color-mix(in srgb,var(--red) 35%,transparent);display:flex;gap:8px;align-items:flex-start;padding:10px 12px;border-radius:var(--r-md);font-size:13px}
+.mt5-reset-row{display:flex;gap:10px;margin-top:14px}
+#mt5SettingsCard .group{margin-top:14px}
+#mt5SettingsCard .item{padding-left:0}

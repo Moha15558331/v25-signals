@@ -1,7 +1,7 @@
-/* ATS v4.6 app: remote control + dashboard for the 5-minute Rise/Fall bot and the MT5 panel. Views: Home, MT5, Stats, History, Settings. */
+/* ATS v4.7 app: remote control + dashboard for the 5-minute Rise/Fall bot and the MT5 panel. Views: Home, MT5, Stats, History, Settings. */
 (() => {
 'use strict';
-const APP_VER = '4.6.0';
+const APP_VER = '4.7.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -332,7 +332,8 @@ const F = [ // [key, label, hint, type, unit, step, icon class, icon, sessions-o
   ['g', 'Safety', [['m_max_losses', 'Max losses in a row', '', 'n', '', 1, 'c5', I.x], ['max_stake', 'Max stake', '', 'n', '$', 0.5, 'c5', I.wallet]]],
 ];
 const F_RF = [
-  ['g', 'Trade', [['stake', 'Stake', 'Sized so one win is about +$0.50', 'n', '$', 0.05, 'c1', I.wallet]]],
+  ['g', 'Trade', [['stake', 'Stake', 'Any size the broker accepts. Not limited by the session or daily stop.', 'n', '$', 0.05, 'c1', I.wallet]]],
+  ['g', 'Martingale', [['martingale', 'Martingale', '', 'b', '', 0, 'c2', I.zap], ['mg_factor', 'Factor', '', 'n', '×', 0.1, 'c2', I.zap, 0, 1], ['mg_max_steps', 'Steps', '', 'n', '', 1, 'c2', I.layers, 0, 1], ['mg_reset_win', 'Reset on a win', '', 'b', '', 0, 'c2', I.refresh, 0, 1]]],
   ['g', 'Sessions', [['ses_on', 'Sessions', '', 'b', '', 0, 'c1', I.layers], ['ses_count', 'Sessions per day', '', 'n', '', 1, 'c1', I.layers, 1], ['ses_tp', 'Session target', '', 'n', '$', 0.1, 'c3', I.target, 1], ['ses_sl', 'Session stop', '', 'n', '$', 0.5, 'c4', I.shield, 1], ['ses_pause', 'Pause between', '', 'n', 's', 10, 'c1', I.clock, 1]]],
   ['g', 'Daily limits', [['day_tp', 'Daily lock', '', 'n', '$', 0.5, 'c3', I.lock], ['day_sl', 'Daily stop', '', 'n', '$', 0.5, 'c4', I.shield]]],
   ['g', 'Safety', [['max_consec_losses', 'Max losses in a row', '', 'n', '', 1, 'c5', I.x], ['max_stake', 'Max stake', '', 'n', '$', 0.5, 'c5', I.wallet]]],
@@ -356,7 +357,7 @@ function renderSettings() {
   const obj = draft; obj.strategy = 'classic';
   // Safety: the run-level session stop/take-profit are not used in sessions mode
   const src = F_RF;
-  const groups = src.map(([g, t, fs]) => [g, t, fs.filter(f => !(f[8] && !obj.ses_on) && !(f[9] && !obj.m_mg))]);
+  const groups = src.map(([g, t, fs]) => [g, t, fs.filter(f => !(f[8] && !obj.ses_on) && !(f[9] && !(obj.martingale || obj.m_mg)))]);
   el.innerHTML = `
   ${on ? `<div class="notice">${I.info}<span>Stop ${bx.name} to change its settings.</span></div>` : ''}
   <div class="group"><div class="group-t">Bot</div><p class="note" style="margin:4px 6px 0">ATS bot · Rise/Fall 5m on Volatility 25 (1s).</p></div>
@@ -382,7 +383,7 @@ function renderSettings() {
   <p class="note">ATS v${APP_VER}</p>
   ${dirty ? `<div class="save-bar"><button type="button" class="btn ghost" id="discard">Discard</button><button type="button" class="btn primary" id="saveSet">Save changes</button></div>` : ''}`;
   el.querySelectorAll('[data-k]').forEach(inp => inp.oninput = inp.onchange = () => { const k = inp.dataset.k; obj[k] = inp.type === 'checkbox' ? inp.checked : inp.tagName === 'SELECT' ? (inp.dataset.num ? +inp.value : inp.value) : inp.value === '' ? '' : +inp.value;
-    markDirty(); if (k === 'ses_on') renderSettings(); });
+    markDirty(); if (k === 'ses_on' || k === 'martingale') renderSettings(); });
   el.querySelectorAll('[data-g]').forEach(inp => inp.oninput = () => { gdraft[inp.dataset.g] = +inp.value; markDirty(); });
   el.querySelectorAll('[data-bot-list] input,[data-bot-list] select').forEach(x => { if (on) x.disabled = true; });
   el.querySelectorAll('#themeSeg button').forEach(b => b.onclick = () => setTheme(b.dataset.t));

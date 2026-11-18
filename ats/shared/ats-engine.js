@@ -1,7 +1,6 @@
 /* ATS engine: pure logic for the Rise/Fall bot on Volatility 25 (1s) (no network, no DOM).
  * Shared by the browser (window.ATSEngine) and Node unit tests (require).
- * Stake ladder, martingale, risk limits, cycle/duration rules and the proposal builder live here.
- * Stake caps removed so any stake / parameters can be used freely. */
+ * Stake ladder, martingale, risk limits, cycle/duration rules and the proposal builder live here. */
 (function (root) {
   'use strict';
   const r2 = x => Math.round((+x + Number.EPSILON) * 100) / 100;
@@ -13,7 +12,7 @@
     desc: 'CALL / PUT on Volatility 25 (1s). Our analysis picks the side. Martingale ×2.1.',
     defaults: { stake: 0.35, cycle: '5m', custom_n: 10, custom_u: 'm', ticks: 5, align: true, direction: 'analysis',
       martingale: true, mg_factor: 2.1, mg_max_steps: 3, mg_reset_win: true,
-      session_sl: 6, session_tp: 3, max_consec_losses: 4, max_stake: 10000,
+      session_sl: 6, session_tp: 3, max_consec_losses: 4, max_stake: 3.5,
       // strategy: 'hybrid' = the ATS bot (Differs on the least digit, Over 2 / Under 7 recovery; shared/hybrid.js, server only),
       // 'classic' = the analysis above; 'model10m' = 10-minute neural-net forward test (kept, hidden; server, demo only)
       strategy: 'mult', model_stake: 1, day_tp: 1, day_sl: 2,
@@ -80,7 +79,7 @@
     const out = []; let cum = 0;
     for (let i = 0; i <= n; i++) {
       const raw = +p.stake * Math.pow(p.martingale ? +p.mg_factor : 1, i); const stake = roundStake(raw); cum = r2(cum + stake);
-      out.push({ step: i, raw: +raw.toFixed(6), stake, cum, over: false });
+      out.push({ step: i, raw: +raw.toFixed(6), stake, cum, over: p.max_stake != null && stake > +p.max_stake + 1e-9 });
     }
     return out;
   }
@@ -88,17 +87,17 @@
   function validateParams(p) {
     const errs = [];
     const num = (k, min, max, label) => { const v = +p[k]; if (!isFinite(v) || v < min || (max != null && v > max)) errs.push(`${label} must be ${max != null ? `${min}–${max}` : `≥ ${min}`}`); };
-    num('stake', MIN_STAKE, 100000, 'Stake');
+    num('stake', MIN_STAKE, 1000, 'Stake');
     if (Math.abs(r2(p.stake) - +p.stake) > 1e-9) errs.push('Stake can have at most 2 decimals');
     num('session_sl', 0.01, null, 'Session stop-loss');
     num('session_tp', 0.01, null, 'Take-profit');
     num('max_consec_losses', 1, 50, 'Max losses in a row');
-    // max_stake check relaxed / removed for free control
+    num('max_stake', MIN_STAKE, 1000, 'Max stake cap');
     if (p.martingale) { num('mg_factor', 1.01, 20, 'Martingale factor'); num('mg_max_steps', 1, 10, 'Martingale max steps'); }
     if (!['analysis', 'up', 'down', 'alternate'].includes(p.direction)) errs.push('Pick a direction mode');
     if (p.strategy != null && !STRATEGIES[p.strategy]) errs.push('Pick a strategy');
     if (p.strategy === 'model10m') {
-      num('model_stake', MIN_STAKE, 100000, 'Model stake'); num('day_tp', 0.01, 1000, 'Daily profit lock'); num('day_sl', 0.01, 1000, 'Daily stop');
+      num('model_stake', MIN_STAKE, 1000, 'Model stake'); num('day_tp', 0.01, 1000, 'Daily profit lock'); num('day_sl', 0.01, 1000, 'Daily stop');
       if (Math.abs(r2(p.model_stake) - +p.model_stake) > 1e-9) errs.push('Model stake can have at most 2 decimals');
     }
     if (p.cycle === 'ticks') { if (!(+p.ticks >= TICKS[0] && +p.ticks <= TICKS[1] && Number.isInteger(+p.ticks))) errs.push(`Ticks must be ${TICKS[0]}–${TICKS[1]}`); }
@@ -110,18 +109,18 @@
     }
     return errs;
   }
-  /** Effective params for the 5-minute Rise/Fall ATS bot (sessions on, martingale off). */
+  /** Effective params for the 5-minute Rise/Fall ATS bot (sessions on; martingale follows the saved setting). */
   function classicParams(p) {
     const d = { stake: 0.55, cycle: '5m', custom_n: 10, custom_u: 'm', ticks: 5, align: true, direction: 'analysis',
       martingale: false, mg_factor: 2.1, mg_max_steps: 3, mg_reset_win: true,
-      session_sl: 6, session_tp: 3, max_consec_losses: 8, max_stake: 10000, strategy: 'classic',
+      session_sl: 6, session_tp: 3, max_consec_losses: 8, max_stake: 3.5, strategy: 'classic',
       ses_on: true, ses_count: 7, ses_tp: 0.5, ses_sl: 2, ses_pause: 60, day_tp: 3.5, day_sl: 4 };
     return Object.assign({}, d, p, { strategy: 'classic' });
   }
   const dayKey = ep => new Date((ep + 10800) * 1000).toISOString().slice(0, 10); // UTC+3 trading day
   const nextMidnight = ep => { const t = ep + 10800; return (Math.floor(t / 86400) + 1) * 86400 - 10800; };
 
-  /** Martingale + risk state for one bot run. Stake caps removed so any stake is allowed.
+  /** Martingale + risk state for one bot run. Session/day stops apply after a trade settles, not by blocking the stake up front.
    *  When p.ses_on, the 7-session day engine is used (ses_tp / ses_sl per session, day_tp / day_sl, pause);
    *  the run-level session_tp / session_sl are ignored. */
   class BotRun {
@@ -143,16 +142,15 @@
       else if (this.sesLog.length >= +p.ses_count) { this.dayState = 'locked'; this.dayReason = `All ${+p.ses_count} sessions done`; }
       return this.dayState !== 'trading'; }
     stakeForStep(step) { const p = this.p; return roundStake(+p.stake * Math.pow(p.martingale ? +p.mg_factor : 1, step)); }
-    /** Stake for the next contract, or null (and haltReason set) if any limit forbids trading. Sessions mode: use next(). Stake cap removed. */
+    /** Stake for the next contract, or null (and haltReason set) if any limit forbids trading. Sessions mode: use next(). */
     nextStake() {
       if (this.haltReason) return null;
       if (this.check()) return null;
       const p = this.p, s = this.stakeForStep(this.step);
-      // stake cap check removed for free control
-      // session SL room check removed for free control
+      if (s > +p.max_stake + 1e-9) return this.halt(`Next stake $${s.toFixed(2)} would exceed the $${(+p.max_stake).toFixed(2)} cap`);
       this.lastStake = s; return s;
     }
-    /** Sessions/day-aware next trade: {stake, step} | {wait:'day'|'session', until, reason, state} | {halt}. Stake room checks relaxed. */
+    /** Sessions/day-aware next trade: {stake, step} | {wait:'day'|'session', until, reason, state} | {halt}. */
     next(t, extraRoom) {
       t = t || Math.floor(Date.now() / 1000);
       if (!this.p.ses_on) { const s = this.nextStake(); return s == null ? { halt: this.haltReason } : { stake: s, step: this.step }; }
@@ -161,7 +159,7 @@
       const p = this.p;
       if (this.sesUntil > t) return { wait: 'session', until: this.sesUntil, state: 'pause', reason: `Session ${this.ses}/${+p.ses_count} starts soon` };
       const s = this.stakeForStep(this.step);
-      // stake cap and room checks removed / relaxed so any stake is allowed
+      if (s > +p.max_stake + 1e-9) return this.halt(`Next stake $${s.toFixed(2)} would exceed the $${(+p.max_stake).toFixed(2)} cap`) || { halt: this.haltReason };
       this.lastStake = s; return { stake: s, step: this.step };
     }
     endSession(t, end) { const p = this.p; this.sesLog.push({ n: this.ses, pnl: this.sesPnl, trades: this.sesTrades, end, t });

@@ -10,18 +10,19 @@
 <meta name="apple-mobile-web-app-title" content="ATS">
 <meta name="application-name" content="ATS">
 <meta name="app-version" content="4.8.0">
-<meta name="description" content="ATS: Rise and Fall, Even/Odd, Over/Under and Matches/Differs bots plus the MT5 bot, running 24/7 on your server. Demo by default.">
+<meta name="description" content="ATS: Rise and Fall, Even/Odd, Over/Under and Matches/Differs bots plus the MT5 bot, running 24/7 on your server.">
 <title>ATS · Auto Trading System</title>
 <link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
-<link rel="apple-touch-icon" sizes="180x180" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="style.css?v=60">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/ats-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/ats-180.png">
+<link rel="stylesheet" href="style.css?v=61">
 <script>try{var t=localStorage.getItem('ats.theme2')||'auto';var d=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){document.documentElement.dataset.theme='dark';}</script>
 </head><body>
 <div class="chrome" id="chrome">
 <header class="top">
   <div class="top-inner">
-    <div class="brand"><span class="logo" aria-hidden="true"><svg viewBox="0 0 32 32"><rect x="1.5" y="1.5" width="29" height="29" rx="8.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 20.5l4.5-5 3.5 3 7.5-8.5" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="23.5" cy="10" r="1.9" fill="currentColor" stroke="none"/></svg></span><b>ATS</b></div>
+    <div class="brand"><span class="logo" aria-hidden="true"><img src="icons/ats-192.png" alt="" width="28" height="28"></span><b>ATS</b></div>
     <nav class="tabbar" id="tabbar" aria-label="Sections">
       <button type="button" data-go="home" class="on"><svg viewBox="0 0 24 24"><path d="M4 10.5L12 4l8 6.5V20H4z"/><path d="M10 20v-5h4v5"/></svg><span>Home</span></button>
       <button type="button" data-go="mt5"><svg viewBox="0 0 24 24"><path d="M7 4v3M7 15v5M17 4v6M17 18v2"/><rect x="5" y="7" width="4" height="8" rx="1"/><rect x="15" y="10" width="4" height="8" rx="1"/></svg><span>MT5</span></button>
@@ -29,6 +30,7 @@
       <button type="button" data-go="history"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>History</span></button>
       <button type="button" data-go="settings"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></svg><span>Settings</span></button>
     </nav>
+    <button type="button" class="stop-top" id="stopTop" hidden aria-label="Stop all bots"><svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg><span>Stop all</span></button>
     <button type="button" class="acct-pill" id="acctPill" aria-label="Account"><span class="badge" id="modeBadge"><i class="live-dot" id="liveDot"></i><span id="modeTxt">OFFLINE</span></span><span class="acct-bal" id="acctBal">—</span><svg class="chev" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button>
   </div>
 </header>
@@ -56,7 +58,7 @@
         <div class="home-main">
           <div class="summary" id="summary"></div>
           <section class="sec" aria-label="Bots">
-            <div class="sec-h"><h2>Bots</h2><button type="button" class="btn ghost sm" id="stopAll" hidden>Stop all</button></div>
+            <div class="sec-h"><h2>Bots</h2><button type="button" class="btn danger sm" id="stopAll" hidden>Stop all</button></div>
             <div class="bots" id="bots"></div>
           </section>
         </div>
@@ -95,7 +97,7 @@
   </section>
 
   <section class="view" id="v-mt5" hidden>
-    <h1 class="page-title">MT5 <span>V25 (1s) CFD · demo</span></h1>
+    <h1 class="page-title">MT5 <span>V25 (1s) CFD</span></h1>
     <div id="mt5Body"></div>
   </section>
 
@@ -122,8 +124,8 @@
 <div class="toasts" id="toasts" aria-live="polite"></div>
 <div class="sheet-wrap" id="sheetWrap" hidden><div class="sheet-bg" id="sheetBg"></div><div class="sheet" id="sheet" role="dialog"></div></div>
 
-<script src="shared/ats-engine.js?v=60"></script>
-<script src="remote.js?v=60"></script>
-<script src="app.js?v=60"></script>
-<script src="mt5.js?v=60"></script>
+<script src="shared/ats-engine.js?v=61"></script>
+<script src="remote.js?v=61"></script>
+<script src="app.js?v=61"></script>
+<script src="mt5.js?v=61"></script>
 </body></html>

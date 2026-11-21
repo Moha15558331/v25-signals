@@ -7,7 +7,7 @@ const LS = { key: 'ats.server.key', url: 'ats.server.url' };
 const get = k => { try { return localStorage.getItem(k) || ''; } catch (e) { return ''; } };
 const set = (k, v) => { try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch (e) { } };
 const R = {
-  st: null, hist: null, stats: null, err: null, lastOk: 0, busy: false, histAt: 0, statsAt: 0, listeners: [],
+  st: null, hist: null, histBot: null, wantHist: null, wantStats: false, stats: null, err: null, lastOk: 0, busy: false, histAt: 0, statsAt: 0, listeners: [],
   url() { return (get(LS.url) || DEF_URL).replace(/\/+$/, ''); },
   hasKey() { return !!get(LS.key); },
   key() { return get(LS.key); },
@@ -32,16 +32,18 @@ const R = {
   async refresh(full) {
     if (!this.hasKey()) { this.changed(); return; }
     try { const s = await this.api('GET', '/api/status'); this.st = s; this.err = null; this.lastOk = Date.now();
-      if (full || !this.hist || Date.now() - this.histAt > 15000) { this.hist = await this.api('GET', '/api/history?limit=500'); this.histAt = Date.now(); }
-      if (full || !this.stats || Date.now() - this.statsAt > 20000) { this.stats = await this.api('GET', '/api/stats'); this.statsAt = Date.now(); }
+      if (this.wantHist && (full || !this.hist || this.histBot !== this.wantHist || Date.now() - this.histAt > 15000)) { const b = this.wantHist; this.hist = await this.api('GET', '/api/history?limit=1500&bot=' + encodeURIComponent(b)); this.histBot = b; this.histAt = Date.now(); }
+      if (this.wantStats && (full || !this.stats || Date.now() - this.statsAt > 20000)) { this.stats = await this.api('GET', '/api/stats'); this.statsAt = Date.now(); }
     } catch (e) { this.err = e.message; if (e.status === 401) this.authBad = true; }
     this.changed();
   },
-  kick() { clearTimeout(this._t); const loop = async () => { if (!document.hidden && this.hasKey()) await this.refresh(); const st = this.st; this._t = setTimeout(loop, st && (st.bot.running || st.bot.open || (st.rf && (st.rf.running || st.rf.open))) ? 2500 : 6000); }; loop(); },
+  kick() { clearTimeout(this._t); const loop = async () => { if (!document.hidden && this.hasKey()) await this.refresh(); const st = this.st; const on = st && (st.bot.running || st.bot.open || Object.values(st.bots || {}).some(b => b.running || b.open)); this._t = setTimeout(loop, on ? 2500 : 6000); }; loop(); },
   async act(method, path, body) { this.busy = true; this.changed();
     try { const d = await this.api(method, path, body); if (d.status) this.st = d.status; await this.refresh(true); return d; } finally { this.busy = false; this.changed(); } },
-  start(bot) { return this.act('POST', '/api/bot/start' + (bot === 'rf1h' ? '?bot=rf1h' : '')); },
-  stop(bot) { return this.act('POST', '/api/bot/stop' + (bot === 'rf1h' ? '?bot=rf1h' : '')); },
+  start(bot) { return this.act('POST', '/api/bot/start' + (bot && bot !== 'ats' ? '?bot=' + encodeURIComponent(bot) : '')); },
+  stop(bot) { return this.act('POST', '/api/bot/stop' + (bot && bot !== 'ats' ? '?bot=' + encodeURIComponent(bot) : '')); },
+  stopAll() { return this.act('POST', '/api/stop-all'); },
+  saveBot(id, params) { return this.act('PUT', '/api/settings', { bots: { [id]: params } }); },
   saveParams(params) { return this.act('PUT', '/api/settings', { params }); },
   saveRf(rf_params) { return this.act('PUT', '/api/settings', { rf_params }); },
   saveGlobal(g) { return this.act('PUT', '/api/settings', { global: g }); },

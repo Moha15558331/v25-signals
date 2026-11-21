@@ -1,7 +1,7 @@
 {
   "name": "ATS · Auto Trading System",
   "short_name": "ATS",
-  "description": "ATS bot: Differs + Rise/Fall recovery on Volatility 25 (1s), running 24/7 on your server. Demo by default.",
+  "description": "ATS: Rise and Fall, Even/Odd, Over/Under and Matches/Differs bots plus MT5, running 24/7 on your server. Demo by default.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

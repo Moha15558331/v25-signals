@@ -1,4 +1,19 @@
-# ATS · Auto Trading System (v4.3)
+# ATS app v4.8
+
+A remote control and dashboard for the bots running 24/7 on Mohamed's server. Demo by default.
+
+## Bots (v4.8)
+- **Rise and Fall**: Rise/Fall on Volatility 25 (1s) with candle cycle, martingale, sessions and daily lock/stop. The only bot allowed on Real.
+- **Even/Odd**, **Over/Under** (barriers), **Matches/Differs** (market, own or random digit): 1–10 tick digit contracts on any Volatility index (default V25 1s). Demo only. Each has its own stake, ticks, martingale (factor or auto from the payout, steps, reset on a win), sessions, and daily lock/stop.
+- **MT5**: ATS_V25 EA on Deriv-Demo, with optional loss recovery (factor, max steps, max lot, reset on any win or once the loss is won back).
+
+Every bot starts and stops on its own, several can run at once, and **Stop all** stops everything. History and Stats filter by bot.
+Settings forms are built once and never re-rendered by the status poll, so the keyboard stays open while typing.
+
+---
+
+## Earlier notes
+
 
 A remote control and dashboard for the **ATS bot**, which runs 24/7 on Mohamed's server (`ats.2-29-170-227.sslip.io`). It is **demo by default**.
 

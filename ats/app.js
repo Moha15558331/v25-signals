@@ -1,9 +1,9 @@
-/* ATS v4.8 app: remote control + dashboard. Bots: Rise and Fall (server), Even/Odd, Over/Under, Matches/Differs (server, demo) and the MT5 bot.
+/* ATS v4.9 app: remote control + dashboard. Bots: Rise and Fall (server), Even/Odd, Over/Under, Matches/Differs (server, demo) and the MT5 bot.
  * Views: Home, Bot detail, MT5, Stats, History, Settings.
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.8.0';
+const APP_VER = '4.9.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -45,7 +45,7 @@ const BOTS = [
   { id: 'matchdiff', name: 'Matches/Differs', mono: 'MD', kind: 'dg' },
 ];
 const BOT = Object.fromEntries(BOTS.map(b => [b.id, b]));
-const SYMBOLS = [['1HZ10V', 'V10 (1s)'], ['1HZ25V', 'V25 (1s)'], ['1HZ50V', 'V50 (1s)'], ['1HZ75V', 'V75 (1s)'], ['1HZ100V', 'V100 (1s)'], ['R_10', 'V10'], ['R_25', 'V25'], ['R_50', 'V50'], ['R_75', 'V75'], ['R_100', 'V100']];
+const SYMBOLS = [['1HZ10V', 'V10 (1s)'], ['1HZ25V', 'V25 (1s)'], ['1HZ50V', 'V50 (1s)'], ['1HZ75V', 'V75 (1s)'], ['1HZ100V', 'V100 (1s)'], ['R_10', 'V10'], ['R_25', 'V25'], ['R_50', 'V50'], ['R_75', 'V75'], ['R_100', 'V100'], ['JD10', 'Jump 10'], ['JD25', 'Jump 25'], ['JD50', 'Jump 50'], ['JD75', 'Jump 75'], ['RDBULL', 'Bull Market'], ['RDBEAR', 'Bear Market']];
 const symShort = s => (SYMBOLS.find(x => x[0] === s) || [s, s])[1];
 const sideLabel = (t, b) => ({ CALL: 'Rise', PUT: 'Fall', DIGITEVEN: 'Even', DIGITODD: 'Odd', DIGITOVER: 'Over ' + b, DIGITUNDER: 'Under ' + b, DIGITMATCH: 'Matches ' + b, DIGITDIFF: 'Differs ' + b, MULTUP: 'Up', MULTDOWN: 'Down' }[t] || t);
 const rowBot = h => h.bot_id || (h.strategy === 'rf1h' ? 'rf1h' : 'ats');
@@ -148,21 +148,22 @@ const nm = (k, label, unit, hint, show) => ({ k, label, type: 'n', unit, hint, s
 const it = (k, label, unit, hint, show) => ({ k, label, type: 'i', unit, hint, show });
 const mgOn = d => !!d.martingale, sesOn = d => !!d.ses_on;
 const RF_SCHEMA = [
-  { title: 'Trade', fields: [nm('stake', 'Stake', '$', 'Any amount Deriv accepts'), { k: 'cycle', label: 'Candle', type: 'sel', opts: [['1m', '1 minute'], ['5m', '5 minutes'], ['15m', '15 minutes'], ['30m', '30 minutes'], ['1h', '1 hour']] }] },
+  { title: 'Trade', fields: [nm('stake', 'Stake', '$'), { k: 'cycle', label: 'Candle', type: 'sel', opts: [['1m', '1 minute'], ['5m', '5 minutes'], ['15m', '15 minutes'], ['30m', '30 minutes'], ['1h', '1 hour']] }] },
   { title: 'Martingale', fields: [sw('martingale', 'Martingale'), nm('mg_factor', 'Factor', '×', '', mgOn), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn)] },
   { title: 'Sessions', fields: [sw('ses_on', 'Sessions'), it('ses_count', 'Sessions per day', '', '', sesOn), nm('ses_tp', 'Session target', '$', '', sesOn), nm('ses_sl', 'Session stop', '$', '', sesOn), it('ses_pause', 'Pause between', 's', '', sesOn)] },
   { title: 'Daily limits', fields: [nm('day_tp', 'Daily lock', '$'), nm('day_sl', 'Daily stop', '$'), it('max_consec_losses', 'Max losses in a row')] },
 ];
+const MG_MODES = { evenodd: [['fixed', 'Factor'], ['payout', 'From payout']], overunder: [['digit', 'Auto (per digit)'], ['fixed', 'Factor'], ['payout', 'From payout']], matchdiff: [['side', 'Auto (×1.1 / ×11)'], ['fixed', 'Factor'], ['payout', 'From payout']] };
 function dgSchema(id) {
   const side = { evenodd: [['both', 'Both'], ['even', 'Even'], ['odd', 'Odd']], overunder: [['both', 'Both'], ['over', 'Over'], ['under', 'Under']], matchdiff: [['differ', 'Differs'], ['match', 'Matches']] }[id];
   const digits = (a, b) => Array.from({ length: b - a + 1 }, (_, i) => [a + i, String(a + i)]);
-  const trade = [{ k: 'symbol', label: 'Market', type: 'sel', opts: SYMBOLS, hint: 'Volatility index' }, { k: 'side', label: 'Trade type', type: 'sel', opts: side }];
+  const trade = [{ k: 'symbol', label: 'Market', type: 'sel', opts: SYMBOLS }, { k: 'side', label: 'Trade type', type: 'sel', opts: side }];
   if (id === 'overunder') trade.push({ k: 'over_digit', label: 'Over digit', type: 'sel', num: true, opts: digits(0, 8) }, { k: 'under_digit', label: 'Under digit', type: 'sel', num: true, opts: digits(1, 9) });
   if (id === 'matchdiff') trade.push({ k: 'digit_src', label: 'Digit', type: 'sel', opts: [['market', 'From the market'], ['user', 'My digit'], ['random', 'Random']] }, { k: 'digit', label: 'My digit', type: 'sel', num: true, opts: digits(0, 9), show: d => d.digit_src === 'user' });
-  trade.push(sw('signal', 'Use signal', id === 'matchdiff' ? '' : 'Both: trade the side with the higher %'), it('lookback', 'Ticks to analyze'), it('ticks', 'Duration', 'ticks'), nm('stake', 'Stake', '$', 'Any amount Deriv accepts'));
+  trade.push(sw('signal', 'Use signal'), { k: 'scan', label: 'Signal markets', type: 'sel', opts: [['all', 'All markets'], ['one', 'This market']], show: d => !!d.signal }, it('lookback', 'Ticks to analyze'), it('ticks', 'Duration', 'ticks'), nm('stake', 'Stake', '$'));
   return [
     { title: 'Trade', fields: trade },
-    { title: 'Martingale', fields: [sw('martingale', 'Martingale'), sw('mg_auto', 'Auto factor', 'Wins back the loss from the payout', mgOn), nm('mg_factor', 'Factor', '×', '', d => d.martingale && !d.mg_auto), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn), sw('smart_mg', 'Smart cap', 'Cap a step at the room left', mgOn)] },
+    { title: 'Martingale', fields: [sw('martingale', 'Martingale'), { k: 'mg_mode', label: 'Multiplier', type: 'sel', opts: MG_MODES[id], show: mgOn }, nm('mg_factor', 'Factor', '×', '', d => d.martingale && d.mg_mode === 'fixed'), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn), sw('smart_mg', 'Smart cap', '', mgOn)] },
     { title: 'Sessions', fields: [sw('ses_on', 'Sessions'), it('ses_count', 'Sessions per day', '', '', sesOn), nm('ses_tp', 'Session target', '$', '', sesOn), nm('ses_sl', 'Session stop', '$', '', sesOn), it('ses_pause', 'Pause between', 's', '', sesOn)] },
     { title: 'Daily limits', fields: [nm('day_tp', 'Daily lock', '$'), nm('day_sl', 'Daily stop', '$'), it('max_consec_losses', 'Max losses in a row'), nm('gap', 'Gap between trades', 's')] },
   ];
@@ -184,6 +185,7 @@ function renderHeader() { const st = R.st; const anyOn = st && allBots(st).some(
   const badge = $('modeBadge'); badge.className = 'badge ' + (!st ? 'off' : isReal(st) ? 'real' : '');
   $('modeTxt').textContent = !st ? (R.hasKey() ? (R.err ? 'OFFLINE' : 'CONNECTING') : 'NOT PAIRED') : isReal(st) ? 'REAL' : 'DEMO';
   $('liveDot').className = 'live-dot' + (anyOn ? ' on' : '');
+  const nRun = st ? runningNames(st).length : 0; $('stopTop').hidden = nRun < 1; $('stopTop').disabled = R.busy;
   const bal = st && st.account && st.account.balance; $('acctBal').textContent = bal == null ? '—' : money(bal);
   document.documentElement.classList.toggle('is-real', isReal(st));
   $('realStrip').hidden = !isReal(st);
@@ -213,7 +215,7 @@ function cardHtml(x, real) { const [cc, ct] = stateChip(x); const d = x.day || {
     <div class="bc-m"><div><span class="eyebrow">Today</span><b class="${cls(d.pnl)}">${money(d.pnl || 0, true)}</b></div><div><span class="eyebrow">Trades</span><b>${d.trades || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${wr}</b></div><div><span class="eyebrow">Stake</span><b>${x.next && x.next.stake ? money(x.next.stake) : money(x.params.stake)}</b></div></div>
     ${dayBar(d.pnl, d.stop != null ? d.stop : x.params.day_sl, d.lock != null ? d.lock : x.params.day_tp)}
     <div class="bc-s"><span>${esc(botLine(x))}</span>${sesDots(x.ses, d.state)}</div>
-    <footer class="bc-f"><button type="button" class="btn ${x.on ? 'ghost' : real && !demoOnly ? 'real' : 'primary'} sm" data-act="go"${R.busy || (x.open && !x.running) || demoOnly ? ' disabled' : ''}>${x.on ? (x.running ? I.stop + 'Stop' : 'Stopping…') : I.play + (demoOnly ? 'Demo only' : 'Start')}</button><button type="button" class="btn ghost sm" data-act="open">Details${I.chev}</button></footer>
+    <footer class="bc-f"><button type="button" class="btn ${x.on ? 'ghost' : real && !demoOnly ? 'real' : 'primary'} sm" data-act="go"${R.busy || (x.open && !x.running) || demoOnly ? ' disabled' : ''}>${x.on ? (x.running ? I.stop + 'Stop' : 'Stopping…') : I.play + 'Start'}</button><button type="button" class="btn ghost sm" data-act="open">Details${I.chev}</button></footer>
   </article>`; }
 function mt5CardHtml() { const M = window.ATSMT5 && window.ATSMT5.data(); if (!M) return `<article class="bcard" data-bot="mt5"><header class="bc-h"><span class="mono">M5</span><div class="bc-t"><b>MT5</b><small>V25 (1s) CFD · Deriv-Demo</small></div><span class="chip">Loading</span></header><div class="bc-s"><span>Connecting…</span></div><footer class="bc-f"><button type="button" class="btn ghost sm" data-act="open">Details${I.chev}</button></footer></article>`;
   const e = M.ea || {}, t = e.today || {}, set = e.settings || {}, rec = e.recovery || {}, run = M.control === 'run', p = e.position;
@@ -241,7 +243,7 @@ function renderHome() {
     $('bots').querySelectorAll('.bcard').forEach(c => { const id = c.dataset.bot;
       c.querySelector('[data-act=open]').onclick = () => id === 'mt5' ? go('mt5') : go('bot', id);
       const g = c.querySelector('[data-act=go]'); if (g) g.onclick = () => id === 'mt5' ? window.ATSMT5.toggle() : startStop(id); }); }
-  $('stopAll').hidden = running < 1; $('stopAll').disabled = R.busy;
+  $('stopAll').hidden = running < 1; $('stopAll').disabled = R.busy; $('stopAll').innerHTML = I.stop + 'Stop all';
   const rec = bots.flatMap(x => x.recent.map(r => Object.assign({ bot_id: x.id }, r))).sort((a, b) => b.t - a.t).slice(0, 8);
   const rh = rec.length ? rec.map(h => tradeRow(h, true)).join('') : '<li class="empty">No trades yet</li>'; if ($('recent').innerHTML !== rh) $('recent').innerHTML = rh;
   const age = R.lastOk ? Math.round((Date.now() - R.lastOk) / 1000) : null;
@@ -251,10 +253,14 @@ async function startStop(id) { const st = R.st; if (!st) return; const x = botOf
   if (x.on) { try { await R.stop(id); toast({ level: 'info', title: x.name + ' stopping', text: x.open ? 'Waiting for the open trade to settle' : '' }); } catch (e) { errToast(e); } return; }
   if (id === 'ats' && isReal(st)) { if (!(await ask({ title: 'Start on real money?', text: `Daily stop −$${(+x.params.day_sl).toFixed(2)} applies.`, real: true, ok: 'Start' }))) return; }
   try { await R.start(id); } catch (e) { errToast(e); } }
-$('stopAll').onclick = async () => { const st = R.st; if (!st) return; const M = window.ATSMT5 && window.ATSMT5.data();
-  const names = allBots(st).filter(x => x.on).map(x => x.name).concat(M && M.control === 'run' ? ['MT5'] : []);
-  if (!(await ask({ title: 'Stop all bots?', text: `${names.join(', ')}. Open trades settle normally.`, ok: 'Stop all', danger: true }))) return;
-  try { if (allBots(st).some(x => x.on)) await R.stopAll(); if (M && M.control === 'run') await window.ATSMT5.stop(); toast({ level: 'info', title: 'All bots stopping' }); } catch (e) { errToast(e); } };
+/** Everything running: Deriv bots that are on plus the MT5 EA when it is allowed to trade. */
+function runningNames(st) { const M = window.ATSMT5 && window.ATSMT5.data(); return (st ? allBots(st).filter(x => x.on).map(x => x.name) : []).concat(M && M.control === 'run' ? ['MT5'] : []); }
+async function stopAllNow() { const st = R.st; if (!st) return; const names = runningNames(st); if (!names.length) return;
+  if (!(await ask({ title: 'Stop all bots?', text: names.join(', '), ok: 'Stop all', danger: true }))) return;
+  try { const M = window.ATSMT5 && window.ATSMT5.data(); const d = await R.stopAll();
+    if ((!d || !d.mt5 || !d.mt5.ok) && M && M.control === 'run') await window.ATSMT5.stop(); else if (window.ATSMT5) window.ATSMT5.load().then(() => render());
+    toast({ level: 'info', title: 'All bots stopped' }); } catch (e) { errToast(e); } }
+$('stopAll').onclick = stopAllNow; $('stopTop').onclick = stopAllNow;
 
 /* ---------- trade rows ---------- */
 function tradeRow(h, showBot) { const t = h.type || h.contract_type, set = h.status === 'settled' || h.status === 'won' || h.status === 'lost' || (h.profit != null && h.status !== 'open');
@@ -286,14 +292,38 @@ function analysisHtml(x) {
     return `<section class="card"><div class="card-h"><h3>Signal</h3><span class="muted">${s.at ? hm(s.at) : ''}</span></div>
       <div class="sig"><span class="sig-dir ${s.dir === 'up' ? 'up' : s.dir === 'down' ? 'dn' : ''}">${s.dir === 'up' ? I.up + 'Rise' : s.dir === 'down' ? I.down + 'Fall' : 'Neutral'}</span><b>${s.conf != null ? s.conf + '%' : '—'}</b><small>${esc(s.tf || '')} candles · lean ${esc(s.lean || '—')}</small></div>
       ${sk ? `<p class="muted small">Last skip ${hm(sk.at)}: ${esc(sk.why)}</p>` : ''}</section>`; }
-  const an = x.analysis; if (!an || !an.a) return `<section class="card"><div class="card-h"><h3>Digits</h3></div><p class="muted">${x.on ? 'Reading the market…' : 'Start the bot to read the last digits.'}</p></section>`;
-  const a = an.a, p = x.params, mx = Math.max(1, ...a.freq.map(v => v || 0));
-  const hi = d => x.id === 'matchdiff' ? (an.barrier === d ? ' pick' : '') : x.id === 'overunder' ? (d > +p.over_digit && d < +p.under_digit ? ' both' : d > +p.over_digit ? ' ov' : d < +p.under_digit ? ' un' : '') : (d % 2 ? ' od' : ' ev');
-  const kv = x.id === 'evenodd' ? [['Even', a.even + '%'], ['Odd', a.odd + '%']] : x.id === 'overunder' ? [[`Over ${p.over_digit}`, a.over + '%'], [`Under ${p.under_digit}`, a.under + '%']] : [['Most', `${a.most} · ${a.most_pct}%`], ['Least', `${a.least} · ${a.least_pct}%`]];
-  return `<section class="card"><div class="card-h"><h3>Last ${a.n} digits</h3><span class="muted">last ${a.last} · ${hm(an.at)}</span></div>
-    <div class="freq">${a.freq.map((v, d) => `<div class="fb${hi(d)}${a.last === d ? ' last' : ''}"><i style="height:${Math.max(3, (v || 0) / mx * 100)}%"></i><span>${d}</span><small>${v == null ? '' : Math.round(v)}</small></div>`).join('')}</div>
-    <div class="kvs">${kv.map(([k, v]) => `<div><span class="eyebrow">${esc(k)}</span><b>${esc(v)}</b></div>`).join('')}<div><span class="eyebrow">Next</span><b>${an.wait ? 'Wait' : esc(sideLabel(an.contract_type, an.barrier))}</b></div></div>
-    ${an.why || an.wait ? `<p class="muted small">${esc(an.wait || an.why)}</p>` : ''}</section>`; }
+  const an = x.analysis; if (!an || !an.a || an.a.even_pct == null) return `<section class="card"><div class="card-h"><h3>Analysis</h3></div><p class="muted">${x.on ? 'Reading the market…' : '—'}</p></section>`;
+  return digitPanel(x, an); }
+/** Digit analysis exactly as Mohamed's HTML: signal cards, sequence, streaks, primary bars, digit grid (most green, least red). */
+const SYMN = s => (SYMBOLS.find(o => o[0] === s) || [s, s])[1];
+function digitPanel(x, an) {
+  const a = an.a, p = an.p || x.effective || x.params, id = x.id, f1 = v => (+v || 0).toFixed(1), c = an.cards;
+  const mode = id === 'evenodd' ? 'eo' : id === 'overunder' ? 'ou' : 'md';
+  const card = (cl, lab, o, txt) => `<div class="sg-card ${cl}"><span>${esc(lab)}</span><b>${o ? esc(o.name) : 'Scanning…'}</b><em>${o ? esc(txt(o)) : '—'}</em></div>`;
+  const sig = !c ? '' : mode === 'eo' ? card('a', 'Most Even', c.even, o => f1(o.pct) + '%') + card('b', 'Most Odd', c.odd, o => f1(o.pct) + '%')
+    : mode === 'ou' ? card('a', 'Most Over', c.over, o => f1(o.pct) + '%') + card('b', 'Most Under', c.under, o => f1(o.pct) + '%')
+    : (p.digit_src === 'user' ? card('a', 'Most D' + p.digit, c.most, o => `D${o.digit} · ${f1(o.pct)}%`) + card('b', 'Least D' + p.digit, c.least, o => `D${o.digit} · ${f1(o.pct)}%`)
+      : card('a', 'Most Occurring Digit', c.most, o => `D${o.digit} · ${f1(o.pct)}%`) + card('b', 'Least Occurring Digit', c.least, o => `D${o.digit} · ${f1(o.pct)}%`));
+  const seqT = mode === 'eo' ? 'Even / Odd Sequence' : mode === 'ou' ? 'Over / Under Sequence' : 'Digit Sequence';
+  const chip = (ch, i, n) => { const cl = mode === 'md' ? (+ch % 2 === 0 ? 'even' : 'odd') : mode === 'eo' ? (ch === 'E' ? 'even' : 'odd') : ch === 'O' ? 'over' : ch === 'U' ? 'under' : 'mid';
+    return `<i class="${cl}${i === n - 1 ? ' newest' : ''}">${esc(ch)}</i>`; };
+  const seq = (a.seq || []).map((ch, i, arr) => chip(ch, i, arr.length)).join('');
+  const st = a.streaks, tt = mode === 'eo' ? ['Even Streaks', 'Odd Streaks'] : ['Over Streaks', 'Under Streaks'];
+  const sbox = (cl, t, cur, mx, avg) => `<div class="sk-box ${cl}"><b>${t}</b><div><span><small>Current</small>${cur}</span><span><small>Max</small>${mx}</span><span><small>Avg</small>${avg ? (+avg).toFixed(2) : '0'}</span></div></div>`;
+  const streaks = st ? `<div class="sk-grid">${sbox('a', tt[0], st.curA, st.maxA, st.avgA)}${sbox('b', tt[1], st.curB, st.maxB, st.avgB)}</div>` : '';
+  const bar = (cl, txt, pc) => `<div class="pb-track"><div class="pb-fill ${cl}" style="width:${f1(pc)}%"><span>${esc(txt)}</span></div></div>`;
+  const bars = mode === 'eo' ? bar('a', `Even ${f1(a.even_pct)}% (${a.even})`, a.even_pct) + bar('b', `Odd ${f1(a.odd_pct)}% (${a.odd})`, a.odd_pct)
+    : mode === 'ou' ? bar('a', `Over ${a.over_digit} · ${f1(a.over_pct)}% (${a.over})`, a.over_pct) + bar('b', `Under ${a.under_digit} · ${f1(a.under_pct)}% (${a.under})`, a.under_pct) : '';
+  const peak = Math.max(...a.freq, 1);
+  const grid = a.freq.map((v, d) => `<div class="dg-cell${d === a.most ? ' most' : ''}${d === a.least ? ' least' : ''}"><small>${f1(a.freq_pct[d])}%</small><div class="dg-plot"><i style="height:${Math.max(2, v / peak * 58) * 48 / 58}px"></i></div><b>${d}</b></div>`).join('');
+  const next = an.wait ? esc(an.wait) : an.contract_type ? `${esc(sideLabel(an.contract_type, an.barrier))} on ${esc(SYMN(an.trade_symbol || p.symbol))}` : '';
+  return `<section class="card dg-panel"><div class="card-h"><h3>Live Signals</h3><span class="muted">${a.n} ticks · ${esc(SYMN(an.symbol || p.symbol))} · ${hm(an.at)}</span></div>
+    ${sig ? `<div class="sg-grid">${sig}</div>` : ''}${next ? `<p class="dg-next"><span class="eyebrow">Next</span>${next}</p>` : ''}</section>
+    <section class="card dg-panel"><div class="card-h"><h3>${seqT}</h3></div><div class="sq-strip">${seq}</div></section>
+    ${streaks ? `<section class="card dg-panel"><div class="card-h"><h3>Streak Analysis</h3></div>${streaks}</section>` : ''}
+    ${bars ? `<section class="card dg-panel"><div class="card-h"><h3>${mode === 'eo' ? 'Even / Odd' : 'Over / Under'}</h3></div><div class="pb-list">${bars}</div></section>` : ''}
+    <section class="card dg-panel"><div class="card-h"><h3>Digit Statistics</h3></div><div class="dg-grid">${grid}</div>
+      <div class="ml-row"><span class="ml most">Most occurring: <b>${a.most}</b></span><span class="ml least">Least occurring: <b>${a.least}</b></span></div></section>`; }
 function liveHtml(x) { const d = x.day || {}, ss = x.ses, pos = x.pos;
   const mg = x.params.martingale ? `${x.step || 0}/${x.params.mg_max_steps} · ×${(x.mgFactor || x.params.mg_factor || 0).toFixed ? (+(x.mgFactor || x.params.mg_factor)).toFixed(2) : x.params.mg_factor}` : 'Off';
   return `<section class="card live-card"><div class="lv-top"><div><span class="eyebrow">Today</span><div class="big ${cls(d.pnl)}">${money(d.pnl || 0, true)}</div></div><div class="lv-r"><span class="eyebrow">All time</span><b class="${cls(x.stats.pnl)}">${money(x.stats.pnl || 0, true)}</b><small>${x.stats.n || 0} trades · ${pct(x.stats.winrate, 0)}</small></div></div>
@@ -305,14 +335,14 @@ function liveHtml(x) { const d = x.day || {}, ss = x.ses, pos = x.pos;
 let lastLive = '', lastAn = '', lastBR = '';
 function renderBot() { const st = R.st; if (!st) return; const x = botOf(st, botId); if (!x) { go('home'); return; }
   const real = isReal(st), demoOnly = real && x.id !== 'ats';
-  $('botMono').textContent = x.mono; $('botName').textContent = x.name; $('botSub').textContent = `${x.contract} · ${x.market}${x.id !== 'ats' ? ' · demo only' : ''}`;
+  $('botMono').textContent = x.mono; $('botName').textContent = x.name; $('botSub').textContent = `${x.contract} · ${x.market}`;
   const [cc, ct] = stateChip(x); $('botChip').className = 'chip ' + cc; $('botChip').textContent = ct;
-  const g = $('botGo'); g.className = 'btn ' + (x.on ? 'ghost' : real && !demoOnly ? 'real' : 'primary'); g.innerHTML = x.on ? (x.running ? I.stop + 'Stop' : 'Stopping…') : I.play + (demoOnly ? 'Demo only' : 'Start'); g.disabled = R.busy || (x.open && !x.running) || demoOnly;
+  const g = $('botGo'); g.className = 'btn ' + (x.on ? 'ghost' : real && !demoOnly ? 'real' : 'primary'); g.innerHTML = x.on ? (x.running ? I.stop + 'Stop' : 'Stopping…') : I.play + 'Start'; g.disabled = R.busy || (x.open && !x.running) || demoOnly;
   const lv = liveHtml(x); if (lv !== lastLive) { lastLive = lv; $('botLive').innerHTML = lv; }
   const an = analysisHtml(x); if (an !== lastAn) { lastAn = an; $('botAnalysis').innerHTML = an; }
   const br = x.recent.length ? x.recent.slice(0, 10).map(h => tradeRow(Object.assign({ bot_id: x.id }, h))).join('') : '<li class="empty">No trades yet</li>'; if (br !== lastBR) { lastBR = br; $('botRecent').innerHTML = br; }
   mountForm(x); form.patch(x.id === 'ats' ? rfFormValues(x) : x.params); form.setDisabled(x.on);
-  $('botFormLock').hidden = !x.on; $('botFormNote').textContent = x.id === 'ats' ? 'V25 (1s)' : 'Demo'; }
+  $('botFormLock').hidden = !x.on; $('botFormNote').textContent = ''; }
 
 /* ---------- stats ---------- */
 let statsBot = 'all', histBot = 'all';
@@ -336,7 +366,7 @@ function renderStats() { const st = R.st, el = $('statsBody'); chips($('statsChi
       <div class="st"><span class="eyebrow">Wins / losses</span><div class="st-num">${agg.w}–${agg.l}</div><small>${pick.length === 1 ? esc(pick[0].name) : 'all bots'}</small></div></div>
     <section class="card"><div class="card-h"><h3>By bot</h3></div>${bots.map(x => `<div class="row"><div class="l"><b>${esc(x.name)}</b><small>${x.stats.n || 0} trades · ${x.stats.wins || 0}–${x.stats.losses || 0}</small></div><div class="mtr">${meter(x.stats.winrate, x.id === 'ats' ? 0.51 : x.ratio ? 1 / (1 + x.ratio) : null)}</div><div class="r">${pct(x.stats.winrate, 0)}<small class="${cls(x.stats.pnl)}">${money(x.stats.pnl || 0, true)}</small></div></div>`).join('')}</section>
     ${pick.map(sesCard).join('')}
-    ${(() => { const lt = st.real || {}; return statsBot === 'all' || statsBot === 'ats' ? `<section class="card"><div class="card-h"><h3>Real money</h3></div><div class="row"><div class="l"><b>Real P/L</b><small>${lt.lifetime_trades || 0} real trades · Rise and Fall only</small></div><div class="r ${cls(lt.lifetime_pnl)}">${money(lt.lifetime_pnl || 0, true)}</div></div></section>` : ''; })()}`;
+    ${(() => { const lt = st.real || {}; return statsBot === 'all' || statsBot === 'ats' ? `<section class="card"><div class="card-h"><h3>Real money</h3></div><div class="row"><div class="l"><b>Real P/L</b><small>${lt.lifetime_trades || 0} real trades</small></div><div class="r ${cls(lt.lifetime_pnl)}">${money(lt.lifetime_pnl || 0, true)}</div></div></section>` : ''; })()}`;
   if (el.innerHTML !== html) el.innerHTML = html; }
 
 /* ---------- history ---------- */
@@ -352,35 +382,27 @@ $('exportBtn').onclick = () => { const rows = histRows().slice().reverse(); cons
 
 /* ---------- settings ---------- */
 let gForm = null, setSig = '';
-const G_SCHEMA = [{ title: 'Account limits · Rise and Fall', fields: [nm('sl', 'Stop at loss', '$'), nm('tp', 'Stop at profit', '$')] }];
 function renderSettings() { const st = R.st, el = $('setBody');
   if (!st) { if (setSig !== 'none') { setSig = 'none'; if (gForm) { gForm.destroy(); gForm = null; } el.innerHTML = '<div class="card"><p class="muted">Connect your server first.</p></div>'; } return; }
   const real = st.real, rl = isReal(st), pref = themePref(), anyOn = allBots(st).some(x => x.on);
   const sig = [rl, capOn(real), anyOn, pref].join('|');
   if (sig !== setSig) { setSig = sig; if (gForm) { gForm.destroy(); gForm = null; }
     el.innerHTML = `
-    <section class="card"><div class="card-h"><h3>Bots</h3></div>${BOTS.map(b => `<button type="button" class="row link-row" data-bot="${b.id}"><div class="l"><b>${esc(b.name)}</b><small data-sub="${b.id}"></small></div>${I.chev}</button>`).join('')}<button type="button" class="row link-row" data-go2="mt5"><div class="l"><b>MT5</b><small>Expert advisor settings and recovery</small></div>${I.chev}</button></section>
+    <section class="card"><div class="card-h"><h3>Bots</h3></div>${BOTS.map(b => `<button type="button" class="row link-row" data-bot="${b.id}"><div class="l"><b>${esc(b.name)}</b><small data-sub="${b.id}"></small></div>${I.chev}</button>`).join('')}<button type="button" class="row link-row" data-go2="mt5"><div class="l"><b>MT5</b><small>Expert advisor</small></div>${I.chev}</button></section>
     <section class="card"><div class="card-h"><h3>Account</h3></div><div class="row"><div class="l"><b>${rl ? 'Real account' : 'Demo account'}</b><small id="setAcct"></small></div><button type="button" class="link" id="openAcct">Switch</button></div></section>
-    <section class="card"><div id="gForm"></div><div class="save-row" id="gSave" hidden><button type="button" class="btn ghost" id="gDiscard">Discard</button><button type="button" class="btn primary" id="gSaveBtn">Save</button></div>
-      <p class="muted small" id="sessPnl"></p></section>
     <section class="card"><div class="card-h"><h3>Real money</h3></div>
       <div class="row"><div class="l"><b>Lifetime loss cap</b><small id="capTxt"></small></div><label class="switch"><input type="checkbox" id="capOn"${capOn(real) ? ' checked' : ''}><span></span></label></div>
-      ${capOn(real) ? `<div class="row"><div class="l"><b>Cap amount</b></div><span class="inp"><i>$</i><input type="text" inputmode="decimal" id="capIn" value="${esc(real.lifetime_cap)}"></span></div>` : ''}
-      <p class="muted small">Only Rise and Fall can trade real money. The digit bots and MT5 are demo only.</p></section>
+      ${capOn(real) ? `<div class="row"><div class="l"><b>Cap amount</b></div><span class="inp"><i>$</i><input type="text" inputmode="decimal" id="capIn" value="${esc(real.lifetime_cap)}"></span></div>` : ''}</section>
     ${rl ? '' : `<section class="card"><div class="card-h"><h3>Demo tools</h3></div>
-      <div class="row"><div class="l"><b>Reset today</b><small>P/L back to $0, history kept</small></div><button type="button" class="link" id="resetTodaySet">Reset</button></div>
+      <div class="row"><div class="l"><b>Reset today</b></div><button type="button" class="link" id="resetTodaySet">Reset</button></div>
       <div class="row"><div class="l"><b>Reset demo balance</b></div><button type="button" class="link" id="resetDemo">Reset</button></div>
-      <div class="row"><div class="l"><b>Clear history</b><small>${anyOn ? 'Stop all bots first' : 'Deriv bots'}</small></div><button type="button" class="link dn" id="clearHist"${anyOn ? ' disabled' : ''}>Clear</button></div></section>`}
+      <div class="row"><div class="l"><b>Clear history</b>${anyOn ? '<small>Stop all bots first</small>' : ''}</div><button type="button" class="link dn" id="clearHist"${anyOn ? ' disabled' : ''}>Clear</button></div></section>`}
     <section class="card"><div class="card-h"><h3>Appearance</h3></div><div class="seg" id="themeSeg">${['auto', 'light', 'dark'].map(t => `<button type="button" data-t="${t}" class="${pref === t ? 'on' : ''}">${t === 'auto' ? 'Automatic' : t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></section>
     <section class="card"><div class="card-h"><h3>Server</h3></div><div class="row"><div class="l"><b>Connected</b><small>${esc(R.url().replace('https://', ''))}</small></div><button type="button" class="link dn" id="forgetKey">Unpair</button></div></section>
     <p class="muted small center">ATS app v${APP_VER}</p>`;
-    gForm = new FormCtl($('gForm'), G_SCHEMA, st.global, { prefix: 'g', onChange: f => { $('gSave').hidden = !f.dirty; } });
     const q = id => el.querySelector('#' + id);
     el.querySelectorAll('[data-bot]').forEach(b => b.onclick = () => go('bot', b.dataset.bot)); el.querySelector('[data-go2]').onclick = () => go('mt5');
     el.querySelectorAll('#themeSeg button').forEach(b => b.onclick = () => setTheme(b.dataset.t));
-    q('gDiscard').onclick = () => { gForm.discard(); $('gSave').hidden = true; };
-    q('gSaveBtn').onclick = async () => { const d = gForm.draft; if (!(+d.sl > 0) || !(+d.tp > 0)) { toast({ level: 'error', title: 'Enter amounts above $0' }); return; }
-      try { await R.saveGlobal({ sl: +d.sl, tp: +d.tp }); gForm.saved(R.st.global); $('gSave').hidden = true; toast({ level: 'win', title: 'Saved' }); } catch (e) { errToast(e); } };
     q('openAcct').onclick = openAccount;
     if (q('resetDemo')) q('resetDemo').onclick = resetDemo; if (q('resetTodaySet')) q('resetTodaySet').onclick = resetToday; if (q('clearHist')) q('clearHist').onclick = clearHistory;
     q('capOn').onchange = async () => { try { await R.realCap(q('capOn').checked ? 10 : 0, false); toast({ level: 'info', title: q('capOn').checked ? 'Lifetime cap on' : 'Lifetime cap off' }); } catch (e) { errToast(e); } setSig = ''; renderSettings(); };
@@ -389,10 +411,8 @@ function renderSettings() { const st = R.st, el = $('setBody');
       R.realCap(v, up).then(() => toast({ level: 'info', title: 'Lifetime cap set', text: money(v) }), errToast); };
     q('forgetKey').onclick = async () => { if (await ask({ title: 'Unpair this device?', text: 'The key is removed from this device.', ok: 'Unpair', danger: true })) { R.forget(); go('home'); } };
   }
-  gForm.patch(st.global);
   for (const b of BOTS) { const x = botOf(st, b.id), s = el.querySelector(`[data-sub="${b.id}"]`); if (x && s) { const t = `${x.on ? 'Running' : 'Stopped'} · ${x.contract} · stake ${money(x.params.stake)}`; if (s.textContent !== t) s.textContent = t; } }
   const t1 = `${esc(st.account.prefix || '')} · balance ${money(st.account.balance)}`; if ($('setAcct').textContent !== t1) $('setAcct').textContent = t1;
-  $('sessPnl').textContent = `Account P/L since the last new session: ${money(st.session.pnl, true)}`;
   $('capTxt').textContent = capOn(real) ? `${money(real.lifetime_lost)} lost · ${money(real.room_left)} left` : 'Off'; }
 
 /* ---------- account sheet ---------- */
@@ -408,7 +428,7 @@ $('acctPill').onclick = () => { if (!R.st) { if (!R.hasKey()) go('home'); return
 async function enableReal() { const st = R.st, real = st.real;
   if (!real.available) { info('Real mode isn’t available', real.reason); return; }
   if (allBots(st).some(x => x.on)) { info('Stop all bots first', 'Switch modes while nothing is running.'); return; }
-  if (!(await ask({ title: 'Switch to Real money?', text: 'Rise and Fall will trade your real balance. Daily stop −$2 applies. The other bots stay demo only.', real: true, ok: 'Switch' }))) return;
+  if (!(await ask({ title: 'Switch to Real money?', text: 'Rise and Fall will trade your real balance. Daily stop −$2 applies.', real: true, ok: 'Switch' }))) return;
   try { await R.realOn(); catchUpEvents(R.st); toast({ level: 'warn', title: 'Real money mode on' }); } catch (e) { errToast(e); } }
 async function disableReal() { try { await R.realOff(); catchUpEvents(R.st); toast({ level: 'info', title: 'Back on demo' }); } catch (e) { errToast(e); } }
 async function resetDemo() { if (!(await ask({ title: 'Reset demo balance?', text: 'Demo balance returns to the default. Real money is not touched.', ok: 'Reset' }))) return;

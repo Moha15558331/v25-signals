@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.9.2';
+const APP_VER = '4.9.3';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -189,7 +189,7 @@ function renderHeader() { const st = R.st; const anyOn = st && allBots(st).some(
   const bal = st && st.account && st.account.balance; $('acctBal').textContent = bal == null ? '—' : money(bal);
   document.documentElement.classList.toggle('is-real', isReal(st));
   $('realStrip').hidden = !isReal(st);
-  if (st && st.real) $('realStripTxt').textContent = 'Rise and Fall on real money · daily stop −$' + (+st.real.day_sl_max || 2).toFixed(0) + (capOn(st.real) ? ` · cap ${money(st.real.lifetime_cap)} (${money(st.real.room_left)} left)` : '');
+  if (st && st.real) $('realStripTxt').textContent = 'Rise and Fall on real money' + (capOn(st.real) ? ` · cap ${money(st.real.lifetime_cap)} (${money(st.real.room_left)} left)` : '');
   const hm_ = $('heroMode'); hm_.textContent = !st ? (R.err ? 'Offline' : 'Connecting') : isReal(st) ? 'Real' : 'Demo'; hm_.className = 'mode-tag' + (isReal(st) ? ' real' : !st ? ' off' : ''); hm_.hidden = !!st && !isReal(st); }
 
 /* ---------- home ---------- */
@@ -251,7 +251,7 @@ function renderHome() {
   $('statusLine').className = 'status-line' + (R.err ? ' err' : ' ok'); }
 async function startStop(id) { const st = R.st; if (!st) return; const x = botOf(st, id); if (!x) return;
   if (x.on) { try { await R.stop(id); toast({ level: 'info', title: x.name + ' stopping', text: x.open ? 'Waiting for the open trade to settle' : '' }); } catch (e) { errToast(e); } return; }
-  if (id === 'ats' && isReal(st)) { if (!(await ask({ title: 'Start on real money?', text: `Daily stop −$${(+x.params.day_sl).toFixed(2)} applies.`, real: true, ok: 'Start' }))) return; }
+  if (id === 'ats' && isReal(st)) { if (!(await ask({ title: 'Start on real money?', text: 'Rise and Fall will trade your real balance.', real: true, ok: 'Start' }))) return; }
   try { await R.start(id); } catch (e) { errToast(e); } }
 /** Everything running: Deriv bots that are on plus the MT5 EA when it is allowed to trade. */
 function runningNames(st) { const M = window.ATSMT5 && window.ATSMT5.data(); return (st ? allBots(st).filter(x => x.on).map(x => x.name) : []).concat(M && M.control === 'run' ? ['MT5'] : []); }
@@ -428,7 +428,7 @@ $('acctPill').onclick = () => { if (!R.st) { if (!R.hasKey()) go('home'); return
 async function enableReal() { const st = R.st, real = st.real;
   if (!real.available) { info('Real mode isn’t available', real.reason); return; }
   if (allBots(st).some(x => x.on)) { info('Stop all bots first', 'Switch modes while nothing is running.'); return; }
-  if (!(await ask({ title: 'Switch to Real money?', text: 'Rise and Fall will trade your real balance. Daily stop −$2 applies.', real: true, ok: 'Switch' }))) return;
+  if (!(await ask({ title: 'Switch to Real money?', text: 'Rise and Fall will trade your real balance.', real: true, ok: 'Switch' }))) return;
   try { await R.realOn(); catchUpEvents(R.st); toast({ level: 'warn', title: 'Real money mode on' }); } catch (e) { errToast(e); } }
 async function disableReal() { try { await R.realOff(); catchUpEvents(R.st); toast({ level: 'info', title: 'Back on demo' }); } catch (e) { errToast(e); } }
 async function resetDemo() { if (!(await ask({ title: 'Reset demo balance?', text: 'Demo balance returns to the default. Real money is not touched.', ok: 'Reset' }))) return;

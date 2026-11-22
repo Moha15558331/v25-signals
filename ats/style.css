@@ -257,7 +257,7 @@ main{max-width:1240px;margin:0 auto;padding:18px var(--pad) 8px}
 /* v4.9 · Stop all in the top bar */
 .stop-top{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 12px;border-radius:999px;border:1px solid color-mix(in srgb,var(--dn) 45%,transparent);background:var(--dn-bg);color:var(--dn);font-weight:600;font-size:13px;white-space:nowrap;margin-left:auto}
 .stop-top svg{width:15px;height:15px;fill:currentColor;stroke:none}
-.stop-top+.acct-pill{margin-left:0}
+.stop-top[hidden]{display:none}.stop-top:not([hidden])+.acct-pill{margin-left:0}.acct-pill{flex:none}
 @media (max-width:420px){.stop-top span{display:none}.stop-top{padding:0 10px}}
 #stopAll svg{width:14px;height:14px}
 /* v4.9 · MT5 account switch */

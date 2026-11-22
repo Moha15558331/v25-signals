@@ -1,8 +1,8 @@
 /* ATS service worker v14: network-first for the app shell (HTML/JS/CSS),
  * so the phone always picks up a new version. Never caches trading/market traffic
  * (WebSockets and api.derivws.com are cross-origin and pass straight through). */
-const CACHE = 'ats-shell-v22';
-const SHELL = ['./', './index.html', './style.css', './app.js', './remote.js', './mt5.js', './shared/ats-engine.js',
+const CACHE = 'ats-shell-v23';
+const SHELL = ['./', './index.html', './style.css', './app.js', './remote.js', './mt5.js', './push.js', './shared/ats-engine.js',
   './manifest.json', './icons/favicon-32.png', './icons/ats-180.png', './icons/ats-192.png', './icons/ats-512.png', './icons/ats-192-maskable.png', './icons/ats-512-maskable.png'];
 const FRESH = /\.(html|js|css)$/;
 function networkFirst(req) {
@@ -42,4 +42,16 @@ self.addEventListener('fetch', e => {
       throw err;
     }
   })());
+});
+
+/* Push alerts (v4.10): show the server's alert; a tap opens the relevant tab. */
+self.addEventListener('push', e => {
+  let d = {}; try { d = e.data ? e.data.json() : {}; } catch (err) { d = { title: 'ATS', body: e.data ? e.data.text() : '' }; }
+  e.waitUntil(self.registration.showNotification(d.title || 'ATS', { body: d.body || '', tag: d.tag || undefined, icon: './icons/ats-192.png', badge: './icons/ats-192.png', data: { url: d.url || './' } }));
+});
+self.addEventListener('notificationclick', e => {
+  e.notification.close(); const url = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope).href; const go = new URL(url).searchParams.get('go');
+  e.waitUntil((async () => { const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+    for (const c of cs) { if (c.url.startsWith(self.registration.scope)) { await c.focus().catch(() => { }); if (go) c.postMessage({ type: 'go', go }); return; } }
+    await self.clients.openWindow(url); })());
 });

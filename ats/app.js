@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.9.3';
+const APP_VER = '4.10.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -397,10 +397,11 @@ function renderSettings() { const st = R.st, el = $('setBody');
       <div class="row"><div class="l"><b>Reset today</b></div><button type="button" class="link" id="resetTodaySet">Reset</button></div>
       <div class="row"><div class="l"><b>Reset demo balance</b></div><button type="button" class="link" id="resetDemo">Reset</button></div>
       <div class="row"><div class="l"><b>Clear history</b>${anyOn ? '<small>Stop all bots first</small>' : ''}</div><button type="button" class="link dn" id="clearHist"${anyOn ? ' disabled' : ''}>Clear</button></div></section>`}
+    <div id="notifSlot"></div>
     <section class="card"><div class="card-h"><h3>Appearance</h3></div><div class="seg" id="themeSeg">${['auto', 'light', 'dark'].map(t => `<button type="button" data-t="${t}" class="${pref === t ? 'on' : ''}">${t === 'auto' ? 'Automatic' : t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></section>
     <section class="card"><div class="card-h"><h3>Server</h3></div><div class="row"><div class="l"><b>Connected</b><small>${esc(R.url().replace('https://', ''))}</small></div><button type="button" class="link dn" id="forgetKey">Unpair</button></div></section>
     <p class="muted small center">ATS app v${APP_VER}</p>`;
-    const q = id => el.querySelector('#' + id);
+    const q = id => el.querySelector('#' + id); if (window.ATSPush) window.ATSPush.mount(q('notifSlot'));
     el.querySelectorAll('[data-bot]').forEach(b => b.onclick = () => go('bot', b.dataset.bot)); el.querySelector('[data-go2]').onclick = () => go('mt5');
     el.querySelectorAll('#themeSeg button').forEach(b => b.onclick = () => setTheme(b.dataset.t));
     q('openAcct').onclick = openAccount;
@@ -453,5 +454,8 @@ function render() { renderHeader();
   if (view === 'mt5') { if (window.ATSMT5) window.ATSMT5.render(); } else if (view === 'home') renderHome(); else if (view === 'bot') renderBot(); else if (view === 'stats') renderStats(); else if (view === 'history') renderHistory(); else renderSettings(); }
 R.on(() => { pumpEvents(R.st); render(); });
 window.ATSApp = { go, toast, render, setTheme, openAccount, ask, info, money, esc, I, Form: FormCtl, renderHome: () => { if (view === 'home') renderHome(); } };
-go('home'); R.kick();
+function goTo(g) { const [v, a] = String(g || 'home').split(':'); if (['home', 'bot', 'mt5', 'stats', 'history', 'settings'].includes(v)) go(v, a); else go('home'); }
+{ let g0 = null; try { g0 = new URLSearchParams(location.search).get('go'); if (g0) history.replaceState(null, '', location.pathname); } catch (e) { } goTo(g0 || 'home'); }
+if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'go') goTo(e.data.go); });
+R.kick();
 })();

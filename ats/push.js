@@ -12,7 +12,7 @@
   async function isOn() { const s = await sub(); return !!(s && info && info.devices && info.devices.some(x => x.dev === dev())); }
   async function enable() { if (busy) return; err = ''; busy = true; paint();
     try { const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
-      if (perm !== 'granted') throw new Error(perm === 'denied' ? 'Notifications are blocked. Allow them in iPhone Settings > Notifications > ATS.' : 'Permission was not given');
+      if (perm !== 'granted') throw new Error(perm === 'denied' ? (ios ? 'Notifications are blocked. Allow them in iPhone Settings > Notifications > ATS.' : 'Notifications are blocked in this browser’s site settings.') : 'Permission was not given');
       if (!info || !info.publicKey) info = await R.api('GET', '/api/push'); if (!info.available || !info.publicKey) throw new Error('Push is not available on the server');
       const reg = await navigator.serviceWorker.ready; let s = await reg.pushManager.getSubscription();
       if (s) { const k = s.options && s.options.applicationServerKey; const cur = k ? btoa(String.fromCharCode(...new Uint8Array(k))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '') : null; if (cur && cur !== info.publicKey) { await s.unsubscribe(); s = null; } }
@@ -29,7 +29,7 @@
   async function save(patch) { try { info = await R.api('POST', '/api/push/settings', patch); } catch (e) { err = e.message; } paint(); }
   async function paint() { if (!el) return; const on = await isOn(), t = (info && info.types) || {}, q = (info && info.quiet) || { on: false, from: '23:00', to: '07:00' };
     const n = info && info.devices ? info.devices.length : 0;
-    let status = !supported ? (ios && !standalone ? 'Open ATS from your Home Screen icon to turn on alerts.' : 'This browser can’t receive push alerts.') : !info ? 'Loading…' : !info.available ? 'Push is not set up on the server.' : on ? `On for this device · ${n} device${n === 1 ? '' : 's'}` : (Notification.permission === 'denied' ? 'Blocked in iPhone Settings > Notifications > ATS' : `Off on this device${n ? ` · ${n} other device${n === 1 ? '' : 's'}` : ''}`);
+    let status = !supported ? (ios && !standalone ? 'Open ATS from your Home Screen icon to turn on alerts.' : 'This browser can’t receive push alerts.') : !info ? 'Loading…' : !info.available ? 'Push is not set up on the server.' : on ? `On for this device · ${n} device${n === 1 ? '' : 's'}` : (Notification.permission === 'denied' ? (ios ? 'Blocked in iPhone Settings > Notifications > ATS' : 'Blocked in this browser’s site settings') : `Off on this device${n ? ` · ${n} other device${n === 1 ? '' : 's'}` : ''}`);
     const ok = supported && info && info.available;
     el.innerHTML = `<div class="card-h"><h3>Notifications</h3></div>
       <div class="row"><div class="l"><b>Push alerts</b><small>${esc(status)}</small></div>${ok ? (on ? `<button type="button" class="link dn" data-p="off"${busy ? ' disabled' : ''}>Turn off</button>` : `<button type="button" class="link" data-p="on"${busy ? ' disabled' : ''}>Enable</button>`) : ''}</div>

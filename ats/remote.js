@@ -29,6 +29,11 @@ const R = {
     catch (e) { throw new Error('Server unreachable — check your internet'); }
     if (!r.ok || !d || !d.key) throw new Error((d && d.error) || 'Pairing failed'); this.setKey(d.key); return true;
   },
+  async login(password) {
+    let r, d; try { r = await fetch(this.url() + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }), cache: 'no-store' }); d = await r.json().catch(() => null); }
+    catch (e) { throw new Error('Server unreachable — check your internet'); }
+    if (!r.ok || !d || !d.key) throw Object.assign(new Error((d && d.error) || 'Sign-in failed'), { status: r.status }); this.setKey(d.key); return true;
+  },
   async refresh(full) {
     if (!this.hasKey()) { this.changed(); return; }
     try { const s = await this.api('GET', '/api/status'); this.st = s; this.err = null; this.lastOk = Date.now();

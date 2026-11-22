@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.9.0';
+const APP_VER = '4.9.1';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -443,7 +443,7 @@ async function clearHistory() { const st = R.st; if (!st) return; if (isReal(st)
 
 /* ---------- pairing ---------- */
 $('pairBtn').onclick = async () => { const k = ($('pairInput').value || '').trim(); $('pairErr').textContent = '';
-  try { if (/^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/.test(k)) await R.pair(k); else if (k.length >= 32) { R.setKey(k); await R.api('GET', '/api/status'); } else throw new Error('Enter the 8-character pairing code');
+  try { if (/^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/.test(k)) await R.pair(k); else if (!k) throw new Error('Enter your password'); else { try { await R.login(k); } catch (e) { if (e.status === 401 && k.length >= 32) { R.setKey(k); await R.api('GET', '/api/status'); } else throw e; } }
     R.authBad = false; $('pairInput').value = ''; toast({ level: 'win', title: 'Connected' }); await R.refresh(true); R.kick(); }
   catch (e) { if (e.status === 401) R.forget(); $('pairErr').textContent = e.message; } };
 $('pairInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('pairBtn').click(); });

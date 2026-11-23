@@ -1,9 +1,9 @@
-/* ATS v4.13 app: remote control + dashboard. Bots: ATS Bot (server, demo), Rise and Fall (server), Even/Odd, Over/Under, Matches/Differs (server, demo) and the MT5 bot.
+/* ATS v4.14 app: remote control + dashboard. Bots: ATS Bot (server, demo), Rise and Fall (server), Even/Odd, Over/Under, Matches/Differs (server, demo) and the MT5 bot.
  * Views: Home, Bot detail, MT5, Stats, History, Settings.
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.13.0';
+const APP_VER = '4.14.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -15,7 +15,7 @@ const APP_VER = '4.13.0';
     reg.addEventListener('updatefound', () => { const inst = reg.installing; if (!inst) return; inst.addEventListener('statechange', () => { if (inst.state === 'installed' && navigator.serviceWorker.controller) nudge(reg.waiting || inst); }); });
     const ping = () => reg.update().catch(() => { }); setInterval(ping, 60e3); document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
   };
-  const start = () => navigator.serviceWorker.register('./sw.js?v=21', { scope: './' }).then(track).catch(() => { });
+  const start = () => navigator.serviceWorker.register('./sw.js?v=22', { scope: './' }).then(track).catch(() => { });
   if (document.readyState === 'complete') start(); else window.addEventListener('load', start);
 })();
 const R = window.ATSRemote;
@@ -200,7 +200,7 @@ function renderHeader() { const st = R.st; const anyOn = st && allBots(st).some(
   const bal = st && st.account && st.account.balance; $('acctBal').textContent = bal == null ? '—' : money(bal);
   document.documentElement.classList.toggle('is-real', isReal(st));
   $('realStrip').hidden = !isReal(st);
-  if (st && st.real) $('realStripTxt').textContent = 'Rise and Fall on real money' + (capOn(st.real) ? ` · cap ${money(st.real.lifetime_cap)} (${money(st.real.room_left)} left)` : '');
+  if (st && st.real) $('realStripTxt').textContent = 'Real money' + (capOn(st.real) ? ` · cap ${money(st.real.lifetime_cap)} (${money(st.real.room_left)} left)` : '');
   const hm_ = $('heroMode'); hm_.textContent = !st ? (R.err ? 'Offline' : 'Connecting') : isReal(st) ? 'Real' : 'Demo'; hm_.className = 'mode-tag' + (isReal(st) ? ' real' : !st ? ' off' : ''); hm_.hidden = !!st && !isReal(st); }
 
 /* ---------- home ---------- */
@@ -263,6 +263,7 @@ function renderHome() {
 async function startStop(id) { const st = R.st; if (!st) return; const x = botOf(st, id); if (!x) return;
   if (x.on) { try { await R.stop(id); toast({ level: 'info', title: x.name + ' stopping', text: x.open ? 'Waiting for the open trade to settle' : '' }); } catch (e) { errToast(e); } return; }
   if (id === 'ats' && isReal(st)) { if (!(await ask({ title: 'Start on real money?', text: 'Rise and Fall will trade your real balance.', real: true, ok: 'Start' }))) return; }
+  if (id === 'atsbot' && isReal(st)) { const p = x.params; if (!(await ask({ title: 'Start ATS Bot on real money?', text: `It trades your real balance: ${money(p.stake)} stake, ×${p.mg_factor} after a loss, stops for the day at +${money(p.target)} or after ${p.max_consec_losses} losses in a row.`, real: true, ok: 'Start on Real' }))) return; }
   try { await R.start(id); } catch (e) { errToast(e); } }
 /** Everything running: Deriv bots that are on plus the MT5 EA when it is allowed to trade. */
 function runningNames(st) { const M = window.ATSMT5 && window.ATSMT5.data(); return (st ? allBots(st).filter(x => x.on).map(x => x.name) : []).concat(M && M.control === 'run' ? ['MT5'] : []); }
@@ -278,7 +279,7 @@ function tradeRow(h, showBot) { const t = h.type || h.contract_type, set = h.sta
   const b = BOT[h.bot_id] || BOT.ats; const up = t === 'CALL' || t === 'DIGITOVER' || t === 'DIGITEVEN' || t === 'DIGITMATCH';
   const glyph = t === 'CALL' ? I.up : t === 'PUT' ? I.down : t === 'DIGITEVEN' ? 'E' : t === 'DIGITODD' ? 'O' : t === 'DIGITOVER' ? '&gt;' + esc(h.barrier) : t === 'DIGITUNDER' ? '&lt;' + esc(h.barrier) : t === 'DIGITMATCH' ? '=' + esc(h.barrier) : t === 'DIGITDIFF' ? '≠' + esc(h.barrier) : '·';
   const tags = (h.mode === 'real' ? '<span class="tag real">REAL</span>' : '') + (h.step ? `<span class="tag">step ${h.step}</span>` : '') + (h.capped ? '<span class="tag">capped</span>' : '');
-  if (h.bot_id === 'atsbot') { const w = +h.profit > 0; return `<li><span class="t-ico ${!set || w ? 'u' : 'd'}">${!set ? '·' : w ? I.check : I.x}</span><div class="t-main"><b>${!set ? 'Trade open' : w ? 'Won' : 'Lost'}</b><small>${showBot ? 'ATS Bot · ' : ''}${fmtT(h.t)} · ${money(h.stake)}</small></div><div class="amt ${set ? cls(h.profit) : 'muted'}">${set ? money(h.profit, true) : 'Open'}</div></li>`; }
+  if (h.bot_id === 'atsbot') { const w = +h.profit > 0; return `<li><span class="t-ico ${!set || w ? 'u' : 'd'}">${!set ? '·' : w ? I.check : I.x}</span><div class="t-main"><b>${!set ? 'Trade open' : w ? 'Won' : 'Lost'}${h.mode === 'real' ? '<span class="tag real">REAL</span>' : ''}</b><small>${showBot ? 'ATS Bot · ' : ''}${fmtT(h.t)} · ${money(h.stake)}</small></div><div class="amt ${set ? cls(h.profit) : 'muted'}">${set ? money(h.profit, true) : 'Open'}</div></li>`; }
   return `<li><span class="t-ico ${up ? 'u' : 'd'}">${glyph}</span><div class="t-main"><b>${esc(sideLabel(t, h.barrier))}${tags}</b><small>${showBot ? esc(b.name) + ' · ' : ''}${fmtT(h.t)} · ${money(h.stake)}</small></div><div class="amt ${set ? cls(h.profit) : 'muted'}">${set ? money(h.profit, true) : 'Open'}</div></li>`; }
 
 /* ---------- bot detail ---------- */
@@ -356,35 +357,36 @@ function renderBot() { const st = R.st; if (!st) return; const x = botOf(st, bot
   mountForm(x); form.patch(x.id === 'ats' ? rfFormValues(x) : x.params); form.setDisabled(x.on);
   $('botFormLock').hidden = !x.on; $('botFormNote').textContent = ''; }
 
-/* ---------- ATS Bot (v4.13): dashboard + big Start button. Never shows what it trades. ---------- */
+/* ---------- ATS Bot (v4.14): compact dashboard. Never shows what it trades. Follows the account (Demo / Real), locks for the day after its target or stop. ---------- */
 const AB_ICON = '<svg viewBox="0 0 24 24"><path d="M13 2.5L4.5 13.5H11l-1 8 8.5-11H12z" fill="currentColor" stroke="none"/></svg>';
-function abChip(x) { const o = x.outcome; return x.on ? (x.running ? ['live', 'Running'] : ['warn', 'Stopping']) : o === 'target' ? ['ok', 'Target hit'] : o === 'stopped' ? ['bad', 'Stopped'] : ['', 'Ready']; }
-function abStatus(x) { const r = x.ab.run || {}, p = x.params;
+const abLock = x => (x.ab && x.ab.lock) || null;
+function abChip(x) { const o = x.outcome; return x.on ? (x.running ? ['live', 'Running'] : ['warn', 'Stopping']) : o === 'target' ? ['ok', 'Target hit'] : o === 'stopped' ? ['bad', 'Stopped'] : o === 'halted' ? ['bad', 'Halted'] : ['', 'Ready']; }
+function abStatus(x) { const td = x.ab.today || {}, lk = abLock(x);
   if (x.on && !x.running) return 'Finishing the last trade…';
-  if (x.running) return x.pos ? `Trade open · ${money(x.pos.stake)}` : r.trades ? `Trading · ${r.trades} trade${r.trades === 1 ? '' : 's'} this run` : 'Reading the market…';
-  if (x.outcome === 'target') return `Target hit · ${money(r.pnl, true)} in ${r.trades} trades`;
-  if (x.outcome === 'stopped') return /losses in a row/.test(x.msg || '') ? `Stopped after ${+p.max_consec_losses} losses in a row · ${money(r.pnl, true)}` : (x.msg || 'Stopped');
-  return 'Ready when you are'; }
-/** Level bar toward the target: fills 0 → target, ticks every 10%. */
-function abBar(pnl, target, big) { const t = Math.max(0.01, +target || 1), w = Math.max(0, Math.min(1, (+pnl || 0) / t)) * 100, neg = (+pnl || 0) < 0;
-  return `<div class="ab-bar${big ? ' big' : ''}${neg ? ' neg' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(w)}"><i style="width:${w.toFixed(1)}%"></i></div>`; }
-function abCardHtml(x, real) { const [cc, ct] = abChip(x), r = x.ab.run || {}, td = x.ab.today || {}, t = +x.params.target || 1, demoOnly = real;
+  if (x.running) return x.pos ? `Trade open · ${money(x.pos.stake)}` : td.trades ? `Trading · ${td.trades} trade${td.trades === 1 ? '' : 's'} today` : 'Reading the market…';
+  if (lk) return lk.text;
+  if (x.outcome === 'halted') return x.msg || 'Stopped';
+  return 'Ready'; }
+function abBar(pnl, target) { const t = Math.max(0.01, +target || 1), w = Math.max(0, Math.min(1, (+pnl || 0) / t)) * 100;
+  return `<div class="ab-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(w)}"><i style="width:${w.toFixed(1)}%"></i></div>`; }
+const abWr = td => td.trades ? Math.round(td.wins / td.trades * 100) + '%' : '—';
+function abCardHtml(x, real) { const [cc, ct] = abChip(x), td = x.ab.today || {}, t = +x.params.target || 1, lk = abLock(x), dis = R.busy || (x.open && !x.running) || (!x.on && !!lk);
   return `<article class="bcard ab-card${x.on ? ' on' : ''}" data-bot="atsbot">
     <header class="bc-h"><span class="mono ab-mono">${AB_ICON}</span><div class="bc-t"><b>ATS Bot</b><small>Auto trading · target ${money(t)}</small></div><span class="chip ${cc}">${ct}</span></header>
-    <div class="bc-m"><div><span class="eyebrow">Today</span><b class="${cls(td.pnl)}">${money(td.pnl || 0, true)}</b></div><div><span class="eyebrow">This run</span><b class="${cls(r.pnl)}">${money(r.pnl || 0, true)}</b></div><div><span class="eyebrow">Wins</span><b>${td.wins || 0}</b></div><div><span class="eyebrow">Losses</span><b>${td.losses || 0}</b></div></div>
-    ${abBar(r.pnl, t)}<div class="dbar-l"><span>Level ${Math.round((r.progress || 0) * 100)}%</span><span>${money(t)}</span></div>
-    <div class="bc-s"><span>${esc(demoOnly && !x.on ? 'Runs on demo · switch to Demo to start' : abStatus(x))}</span></div>
-    <footer class="bc-f"><button type="button" class="btn ${x.on ? 'ghost' : 'primary'} sm" data-act="go"${R.busy || (x.open && !x.running) || (demoOnly && !x.on) ? ' disabled' : ''}>${x.on ? (x.running ? I.stop + 'Stop' : 'Stopping…') : I.play + 'Start'}</button><button type="button" class="btn ghost sm" data-act="open">Open${I.chev}</button></footer>
+    <div class="bc-m"><div><span class="eyebrow">Today</span><b class="${cls(td.pnl)}">${money(td.pnl || 0, true)}</b></div><div><span class="eyebrow">Wins</span><b>${td.wins || 0}</b></div><div><span class="eyebrow">Losses</span><b>${td.losses || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${abWr(td)}</b></div></div>
+    ${abBar(td.pnl, t)}
+    <div class="bc-s"><span>${!x.on && lk ? I.lock : ''}${esc(abStatus(x))}</span><span class="ab-pct">${Math.round((x.ab.progress || 0) * 100)}%</span></div>
+    <footer class="bc-f"><button type="button" class="btn ${x.on ? 'ghost' : real ? 'real' : 'primary'} sm" data-act="go"${dis ? ' disabled' : ''}>${x.on ? (x.running ? I.stop + 'Stop' : 'Stopping…') : lk ? I.lock + 'Locked' : I.play + 'Start'}</button><button type="button" class="btn ghost sm" data-act="open">Open${I.chev}</button></footer>
   </article>`; }
 const AB_SCHEMA = [{ title: 'Parameters', fields: [
   nm('stake', 'Stake', '$', 'First trade of every chain'),
   nm('mg_factor', 'Martingale', '×', 'Stake × this after a loss, back to the stake after a win'),
-  nm('target', 'Target', '$', 'Stops when this run is up this much'),
-  it('max_consec_losses', 'Stop after', 'losses', 'Losses in a row that end the run')] }];
+  nm('target', 'Daily target', '$', 'Locks for the day when today is up this much'),
+  it('max_consec_losses', 'Stop after', 'losses', 'Losses in a row that end the day')] }];
 let abForm = null, abOpen = false, lastAbHero = '', lastAbRec = '';
 const abVals = p => ({ stake: p.stake, mg_factor: p.mg_factor, target: p.target, max_consec_losses: p.max_consec_losses });
 function abWorst(d) { const s = +d.stake, f = +d.mg_factor, n = Math.round(+d.max_consec_losses); if (!(s > 0 && f >= 1 && n >= 1 && n <= 20)) return '';
-  let sum = 0; for (let i = 0; i < n; i++) sum += Math.round(s * Math.pow(f, i) * 100) / 100; return `Worst case for one run: −${money(sum)} (${n} loss${n === 1 ? '' : 'es'} in a row)`; }
+  let sum = 0; for (let i = 0; i < n; i++) sum += Math.round(s * Math.pow(f, i) * 100) / 100; return `Worst case for one day: −${money(sum)} (${n} loss${n === 1 ? '' : 'es'} in a row)`; }
 function abMountForm(x) { if (abForm) return; $('abSave').hidden = true;
   abForm = new FormCtl($('abForm'), AB_SCHEMA, abVals(x.params), { prefix: 'ab', onChange: f => { $('abSave').hidden = !f.dirty; $('abWorst').textContent = abWorst(f.draft); } });
   $('abWorst').textContent = abWorst(abVals(x.params)); }
@@ -393,7 +395,7 @@ $('abParamsBtn').onclick = () => abToggle(!abOpen);
 $('abBack').onclick = () => go('home');
 $('abBody').onclick = e => { if (e.target.closest('#abGo')) abGoClick(); };
 async function abGoClick() { const st = R.st; if (!st) return; const x = botOf(st, 'atsbot'); if (!x) return;
-  if (!x.on && isReal(st)) { info('ATS Bot runs on demo', 'Switch the account to Demo to start it.'); return; }
+  if (!x.on && abLock(x)) { info('ATS Bot is locked for today', abLock(x).text); return; }
   if (!x.on && abForm && abForm.dirty) { toast({ level: 'warn', title: 'Save or discard your parameter changes first' }); abToggle(true); return; }
   await startStop('atsbot'); }
 $('abDiscard').onclick = () => { if (!abForm) return; abForm.discard(); $('abSave').hidden = true; $('abWorst').textContent = abWorst(abForm.draft); };
@@ -403,22 +405,18 @@ $('abSaveBtn').onclick = async () => { if (!abForm || !R.st) return; const ch = 
   try { await R.saveBot('atsbot', ch); const x = botOf(R.st, 'atsbot'); abForm.saved(abVals(x.params)); $('abSave').hidden = true; $('abWorst').textContent = abWorst(abVals(x.params)); toast({ level: 'win', title: 'Saved', text: 'ATS Bot parameters' }); }
   catch (e) { errToast(e); } btn.disabled = false; };
 function renderAB() { const st = R.st; if (!st) return; const x = botOf(st, 'atsbot'); if (!x) { go('home'); return; }
-  const real = isReal(st), r = x.ab.run || {}, td = x.ab.today || {}, t = +x.params.target || 1, [cc, ct] = abChip(x), lv = Math.round((r.progress || 0) * 100);
-  const wr = td.trades ? Math.round(td.wins / td.trades * 100) + '%' : '—', blocked = !x.on && real, dis = R.busy || (x.open && !x.running) || blocked;
-  const hero = `<section class="card ab-hero ${x.on ? 'is-on' : 'is-' + x.outcome}">
-      <div class="ab-top"><div class="ab-id"><span class="ab-logo">${AB_ICON}</span><div><h1>ATS Bot</h1><small>Auto trading · ${real ? 'Real selected' : 'Demo'}</small></div></div><span class="chip ${cc}">${ct}</span></div>
-      <div class="ab-profit"><span class="eyebrow">This run</span><div class="ab-big ${cls(r.pnl)}">${money(r.pnl || 0, true)}</div><small>of ${money(t)} target</small></div>
-      <div class="ab-level"><div class="ab-lv-h"><span>Level</span><b>${lv}%</b></div>${abBar(r.pnl, t, true)}<div class="ab-lv-l"><span>$0.00</span><span>${money(t / 2)}</span><span>${money(t)}</span></div></div>
-      <div class="ab-go-wrap"><button type="button" class="ab-go${x.on ? ' on' : ''}${real ? ' real' : ''}" id="abGo"${dis ? ' disabled' : ''} aria-label="${x.on ? 'Stop' : 'Start'} ATS Bot"><span class="ab-ring"></span>${x.on ? (x.running ? I.stop : '') : I.play}</button>
-        <b class="ab-go-l">${x.on ? (x.running ? 'Stop' : 'Stopping…') : x.outcome === 'target' || x.outcome === 'stopped' ? 'Start again' : 'Start'}</b></div>
-      <p class="ab-msg">${esc(blocked ? 'ATS Bot runs on demo. Switch to Demo to start it.' : abStatus(x))}</p>
-    </section>
-    <div class="ab-tiles">
-      <div class="ab-tile"><span class="eyebrow">Today</span><b class="${cls(td.pnl)}">${money(td.pnl || 0, true)}</b><small>${td.trades || 0} trade${td.trades === 1 ? '' : 's'}</small></div>
-      <div class="ab-tile"><span class="eyebrow">Wins</span><b class="up">${td.wins || 0}</b><small>today</small></div>
-      <div class="ab-tile"><span class="eyebrow">Losses</span><b class="${td.losses ? 'dn' : ''}">${td.losses || 0}</b><small>today</small></div>
-      <div class="ab-tile"><span class="eyebrow">Win rate</span><b>${wr}</b><small>today</small></div>
-    </div>`;
+  const real = isReal(st), td = x.ab.today || {}, t = +x.params.target || 1, [cc, ct] = abChip(x), lv = Math.round((x.ab.progress || 0) * 100), lk = abLock(x);
+  const locked = !x.on && !!lk, dis = R.busy || (x.open && !x.running) || locked;
+  const btn = x.on ? (x.running ? I.stop + '<span>Stop</span>' : '<span>Stopping…</span>') : locked ? I.lock + '<span>Locked</span>' : I.play + '<span>Start</span>';
+  const hero = `<section class="card ab-hero${x.on ? ' is-on' : ''}${real ? ' is-real' : ''}">
+      <div class="ab-top"><span class="ab-logo">${AB_ICON}</span><div class="ab-id"><b>ATS Bot</b><small>Auto trading · ${real ? 'Real' : 'Demo'}</small></div><span class="chip ${cc}">${ct}</span></div>
+      <div class="ab-row"><div><span class="eyebrow">Today</span><b class="ab-pnl ${cls(td.pnl)}">${money(td.pnl || 0, true)}</b></div><div class="ab-tgt"><span class="eyebrow">Target</span><b>${money(t)}</b></div></div>
+      ${abBar(td.pnl, t)}
+      <div class="ab-lv"><span>${lv}% of target</span><span>${money(Math.max(0, t - (+td.pnl || 0)))} to go</span></div>
+      <div class="ab-stats"><div><span class="eyebrow">Wins</span><b class="up">${td.wins || 0}</b></div><div><span class="eyebrow">Losses</span><b class="${td.losses ? 'dn' : ''}">${td.losses || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${abWr(td)}</b></div><div><span class="eyebrow">Trades</span><b>${td.trades || 0}</b></div></div>
+      <div class="ab-act"><p class="ab-msg${locked ? ' locked' : ''}">${locked ? I.lock : ''}<span>${esc(abStatus(x))}</span></p>
+        <button type="button" class="ab-go${x.on ? ' on' : ''}${real ? ' real' : ''}" id="abGo"${dis ? ' disabled' : ''} aria-label="${x.on ? 'Stop' : 'Start'} ATS Bot">${btn}</button></div>
+    </section>`;
   if (hero !== lastAbHero) { lastAbHero = hero; $('abBody').innerHTML = hero; }
   const rec = x.recent.length ? x.recent.slice(0, 8).map(h => tradeRow(Object.assign({ bot_id: 'atsbot' }, h))).join('') : '<li class="empty">No trades yet</li>';
   if (rec !== lastAbRec) { lastAbRec = rec; $('abRecent').innerHTML = rec; }

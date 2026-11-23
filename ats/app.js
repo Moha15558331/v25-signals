@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.15.0';
+const APP_VER = '4.16.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -359,6 +359,7 @@ function renderBot() { const st = R.st; if (!st) return; const x = botOf(st, bot
 
 /* ---------- ATS Bot (v4.14): compact dashboard. Never shows what it trades. Follows the account (Demo / Real), locks for the day after its target or stop. ---------- */
 const AB_ICON = '<svg viewBox="0 0 24 24"><path d="M13 2.5L4.5 13.5H11l-1 8 8.5-11H12z" fill="currentColor" stroke="none"/></svg>';
+const AB_RESET = '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg>';
 const abLock = x => (x.ab && x.ab.lock) || null;
 function abChip(x) { const o = x.outcome; return x.on ? (x.running ? ['live', 'Running'] : ['warn', 'Stopping']) : o === 'target' ? ['ok', 'Target hit'] : o === 'stopped' ? ['bad', 'Stopped'] : o === 'halted' ? ['bad', 'Halted'] : ['', 'Ready']; }
 function abStatus(x) { const td = x.ab.today || {}, lk = abLock(x);
@@ -396,7 +397,9 @@ let abActOpen = false; // v4.15: Activity collapsed like Parameters until opened
 function abActToggle(open) { abActOpen = open; $('abActBox').hidden = !open; $('abActBtn').setAttribute('aria-expanded', String(open)); $('abActBtn').classList.toggle('open', open); }
 $('abActBtn').onclick = () => abActToggle(!abActOpen);
 $('abBack').onclick = () => go('home');
-$('abBody').onclick = e => { if (e.target.closest('#abGo')) abGoClick(); };
+$('abBody').onclick = e => { if (e.target.closest('#abGo')) abGoClick(); else if (e.target.closest('#abReset')) abResetClick(); };
+/* v4.16: demo only (the server refuses on real): clears today's demo lock and restarts the day counter; trades stay in Activity. */
+async function abResetClick() { try { await R.act('POST', '/api/atsbot/reset-day'); toast({ level: 'win', title: 'Day reset', text: 'Demo is ready to start again' }); } catch (e) { errToast(e); } }
 async function abGoClick() { const st = R.st; if (!st) return; const x = botOf(st, 'atsbot'); if (!x) return;
   if (!x.on && abLock(x)) { info('ATS Bot is locked for today', abLock(x).text); return; }
   if (!x.on && abForm && abForm.dirty) { toast({ level: 'warn', title: 'Save or discard your parameter changes first' }); abToggle(true); return; }
@@ -417,13 +420,13 @@ function renderAB() { const st = R.st; if (!st) return; const x = botOf(st, 'ats
       ${abBar(td.pnl, t)}
       <div class="ab-lv"><span>${lv}% of target</span><span>${money(Math.max(0, t - (+td.pnl || 0)))} to go</span></div>
       <div class="ab-stats"><div><span class="eyebrow">Wins</span><b class="up">${td.wins || 0}</b></div><div><span class="eyebrow">Losses</span><b class="${td.losses ? 'dn' : ''}">${td.losses || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${abWr(td)}</b></div><div><span class="eyebrow">Trades</span><b>${td.trades || 0}</b></div></div>
-      <div class="ab-act"><p class="ab-msg${locked ? ' locked' : ''}">${locked ? I.lock : ''}<span>${esc(abStatus(x))}</span></p>
+      <div class="ab-act"><div class="ab-st"><p class="ab-msg${locked ? ' locked' : ''}">${locked ? I.lock : ''}<span>${esc(abStatus(x))}</span></p>${!real && x.ab.can_reset && !x.on && (lk || td.trades) ? `<button type="button" class="ab-reset" id="abReset"${R.busy ? ' disabled' : ''}>${AB_RESET}<span>Reset day</span></button>` : ''}</div>
         <button type="button" class="ab-go${x.on ? ' on' : ''}${real ? ' real' : ''}" id="abGo"${dis ? ' disabled' : ''} aria-label="${x.on ? 'Stop' : 'Start'} ATS Bot">${btn}</button></div>
     </section>`;
   if (hero !== lastAbHero) { lastAbHero = hero; $('abBody').innerHTML = hero; }
   const rec = x.recent.length ? x.recent.slice(0, 8).map(h => tradeRow(Object.assign({ bot_id: 'atsbot' }, h))).join('') : '<li class="empty">No trades yet</li>';
   if (rec !== lastAbRec) { lastAbRec = rec; $('abRecent').innerHTML = rec; }
-  const sub = td.trades ? `${td.trades} trade${td.trades === 1 ? '' : 's'} today` : 'No trades today'; if ($('abActSub').textContent !== sub) $('abActSub').textContent = sub;
+  const sub = td.trades ? `${td.trades} trade${td.trades === 1 ? '' : 's'} today` : x.recent.length ? 'Recent trades' : 'No trades yet'; if ($('abActSub').textContent !== sub) $('abActSub').textContent = sub;
   abMountForm(x); abForm.patch(abVals(x.params)); abForm.setDisabled(x.on); $('abLock').hidden = !x.on; if (!abForm.dirty) $('abWorst').textContent = abWorst(abVals(x.params)); }
 
 /* ---------- stats ---------- */

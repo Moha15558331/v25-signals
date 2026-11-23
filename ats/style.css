@@ -327,6 +327,10 @@ html[data-theme=light] .dg-panel{--g:#0f9f6e;--gb:#e8f8f1;--gl:#9ad9c0;--r_:#e11
 .ab-act{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:12px;padding-top:12px;border-top:1px solid var(--line)}
 .ab-msg{margin:0;min-width:0;display:flex;align-items:center;gap:6px;color:var(--tx2);font-size:12.5px;line-height:1.35}
 .ab-msg span{overflow:hidden;text-overflow:ellipsis}
+.ab-st{min-width:0;display:flex;flex-direction:column;align-items:flex-start;gap:6px}
+.ab-reset{display:inline-flex;align-items:center;gap:5px;border:0;background:none;padding:2px 0;color:var(--acc);font-size:12px;font-weight:600;cursor:pointer}
+.ab-reset svg{width:13px;height:13px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ab-reset:disabled{opacity:.5}
 .ab-msg svg{width:14px;height:14px;flex:none}.ab-msg.locked{color:var(--tx)}
 .ab-go{flex:none;display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 16px 0 13px;border-radius:999px;border:1px solid color-mix(in srgb,var(--acc) 70%,#000);color:var(--acc-tx);font-size:13.5px;font-weight:600;letter-spacing:.01em;
   background:linear-gradient(180deg,color-mix(in srgb,var(--acc) 88%,#fff),var(--acc));box-shadow:0 1px 0 rgba(255,255,255,.18) inset,0 4px 14px color-mix(in srgb,var(--acc) 22%,transparent);transition:transform .12s ease,filter .15s}

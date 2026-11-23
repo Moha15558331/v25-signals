@@ -1,9 +1,9 @@
-/* ATS v4.11 app: remote control + dashboard. Bots: Rise and Fall (server), Even/Odd, Over/Under, Matches/Differs (server, demo) and the MT5 bot.
+/* ATS v4.13 app: remote control + dashboard. Bots: ATS Bot (server, demo), Rise and Fall (server), Even/Odd, Over/Under, Matches/Differs (server, demo) and the MT5 bot.
  * Views: Home, Bot detail, MT5, Stats, History, Settings.
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.12.0';
+const APP_VER = '4.13.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -15,7 +15,7 @@ const APP_VER = '4.12.0';
     reg.addEventListener('updatefound', () => { const inst = reg.installing; if (!inst) return; inst.addEventListener('statechange', () => { if (inst.state === 'installed' && navigator.serviceWorker.controller) nudge(reg.waiting || inst); }); });
     const ping = () => reg.update().catch(() => { }); setInterval(ping, 60e3); document.addEventListener('visibilitychange', () => { if (!document.hidden) ping(); });
   };
-  const start = () => navigator.serviceWorker.register('./sw.js?v=20', { scope: './' }).then(track).catch(() => { });
+  const start = () => navigator.serviceWorker.register('./sw.js?v=21', { scope: './' }).then(track).catch(() => { });
   if (document.readyState === 'complete') start(); else window.addEventListener('load', start);
 })();
 const R = window.ATSRemote;
@@ -39,6 +39,7 @@ const evIcon = l => ({ win: I.check, loss: I.x, error: I.alert, warn: I.swap, lo
 
 /* ---------- bots ---------- */
 const BOTS = [
+  { id: 'atsbot', name: 'ATS Bot', mono: 'AB', kind: 'ab' },
   { id: 'ats', name: 'Rise and Fall', mono: 'RF', kind: 'rf' },
   { id: 'evenodd', name: 'Even/Odd', mono: 'EO', kind: 'dg' },
   { id: 'overunder', name: 'Over/Under', mono: 'OU', kind: 'dg' },
@@ -58,13 +59,16 @@ function botOf(st, id) {
       step: v.step || 0, recent: v.recent || [], stats: v.stats || {}, pos: v.position, signal: v.signal, skip: v.last_skip, view: v,
       market: `V25 (1s) · ${p.cycle === 'ticks' ? p.ticks + ' ticks' : (p.cycle || '5m') + ' candles'}`, contract: 'Rise / Fall' }; }
   const v = (st.bots || {})[id]; if (!v) return null; const p = v.effective || v.params || {};
+  if (id === 'atsbot') { const ab = v.ab || { run: {}, today: {} };
+    return { id, name: 'ATS Bot', mono: 'AB', running: v.running, open: v.open, on: v.on, state: v.state, msg: v.msg, halt: v.halt_reason, day: v.day || {}, params: p, next: v.next, step: v.step || 0,
+      recent: v.recent || [], stats: v.stats || {}, pos: v.position, view: v, ab, outcome: ab.outcome || 'idle', market: `target ${money(+p.target || 0)}`, contract: 'Auto trading' }; }
   const contract = id === 'evenodd' ? (p.side === 'both' ? 'Even or Odd' : p.side === 'even' ? 'Even' : 'Odd') : id === 'overunder' ? (p.side === 'both' ? `Over ${p.over_digit} or Under ${p.under_digit}` : p.side === 'over' ? `Over ${p.over_digit}` : `Under ${p.under_digit}`) : (p.side === 'match' ? 'Matches' : 'Differs') + (p.digit_src === 'user' ? ' ' + p.digit : p.digit_src === 'random' ? ' · random digit' : ' · market digit');
   return { id, name: v.name, mono: BOT[id].mono, running: v.running, open: v.open, on: v.on, state: v.state, msg: v.msg, halt: v.halt_reason, day: v.day || {}, ses: v.sessions, params: p, next: v.next, step: v.step || 0,
     recent: v.recent || [], stats: v.stats || {}, pos: v.position, analysis: v.analysis, view: v, mgFactor: v.mg_factor, ratio: v.payout_ratio,
     market: `${symShort(p.symbol)} · ${p.ticks} tick${+p.ticks === 1 ? '' : 's'}`, contract };
 }
 const allBots = st => BOTS.map(b => botOf(st, b.id)).filter(Boolean);
-function stateChip(x) { const ds = x.day && x.day.state;
+function stateChip(x) { if (x.id === 'atsbot') return abChip(x); const ds = x.day && x.day.state;
   return ds === 'locked' && x.on ? ['ok', 'Goal locked'] : ds === 'stopped' && x.on ? ['bad', 'Day stopped'] : x.on ? (x.running ? ['live', 'Running'] : ['warn', 'Stopping']) : x.state === 'halted' ? ['bad', 'Halted'] : ['', 'Stopped']; }
 
 /* ---------- theme ---------- */
@@ -178,11 +182,11 @@ function dgSchema(id) {
 
 /* ---------- navigation ---------- */
 let view = 'home', botId = 'ats';
-const VIEWS = ['home', 'bot', 'mt5', 'stats', 'history', 'settings'];
-function go(v, arg) { if (v === 'bot' && arg) botId = arg; view = v; if (window.ATSMT5) window.ATSMT5.show(v === 'mt5', v === 'home');
+const VIEWS = ['home', 'bot', 'ab', 'mt5', 'stats', 'history', 'settings'];
+function go(v, arg) { if (v === 'bot' && arg) botId = arg; if (v === 'bot' && botId === 'atsbot') v = 'ab'; else if (v === 'ab') botId = 'atsbot'; view = v; if (window.ATSMT5) window.ATSMT5.show(v === 'mt5', v === 'home');
   for (const x of VIEWS) { const el = $('v-' + x); if (el) el.hidden = x !== v; }
-  const tab = v === 'bot' ? 'home' : v; document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.go === tab));
-  R.wantHist = v === 'history' ? histBot : v === 'bot' ? null : R.wantHist;
+  const tab = v === 'bot' || v === 'ab' ? 'home' : v; document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.go === tab));
+  R.wantHist = v === 'history' ? histBot : v === 'bot' || v === 'ab' ? null : R.wantHist;
   if (v === 'history') R.refresh(true).catch(() => { });
   window.scrollTo({ top: 0 }); render(); }
 document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.dataset.go));
@@ -215,7 +219,7 @@ function dayBar(pnl, stop, lock) { stop = Math.max(0.01, +stop || 1); lock = Mat
 function sesDots(ss, ds) { if (!ss || !ss.on || !ss.count) return ''; const log = ss.log || [];
   return `<div class="sdots" title="Sessions">${Array.from({ length: ss.count }, (_, i) => { const lg = log[i]; const c = lg ? (lg.pnl > 0 ? 'w' : 'l') : i + 1 === ss.current && ds === 'trading' ? 'c' : ''; return `<i class="${c}"></i>`; }).join('')}<span>${Math.min(ss.done, ss.count)}/${ss.count}</span></div>`; }
 function botLine(x) { if (!x.on) return x.halt ? 'Halted: ' + x.halt : x.state === 'halted' ? (x.msg || 'Halted') : 'Ready'; if (x.pos) return `${sideLabel(x.pos.type, x.pos.barrier) || (x.pos.dir === 'up' ? 'Rise' : 'Fall')} open · ${money(x.pos.stake)}`; return x.msg || 'Watching'; }
-function cardHtml(x, real) { const [cc, ct] = stateChip(x); const d = x.day || {}; const demoOnly = real && x.id !== 'ats';
+function cardHtml(x, real) { if (x.id === 'atsbot') return abCardHtml(x, real); const [cc, ct] = stateChip(x); const d = x.day || {}; const demoOnly = real && x.id !== 'ats';
   const wr = d.trades ? Math.round((d.wins || 0) / d.trades * 100) + '%' : '—';
   return `<article class="bcard${x.on ? ' on' : ''}" data-bot="${x.id}">
     <header class="bc-h"><span class="mono">${x.mono}</span><div class="bc-t"><b>${esc(x.name)}</b><small>${esc(x.contract)} · ${esc(x.market)}</small></div><span class="chip ${cc}">${ct}</span></header>
@@ -243,7 +247,7 @@ function renderHome() {
   const mt5On = !!(M && M.control === 'run'); const running = bots.filter(x => x.on).length + (mt5On ? 1 : 0);
   const sum = `<div class="sm"><span class="eyebrow">Balance</span><b>${money(st.account.balance)}</b><small>${real ? 'Real' : 'Demo'} · ${esc(st.account.prefix || '')}</small></div>
     <div class="sm"><span class="eyebrow">Today</span><b class="${cls(todayAll)}">${money(todayAll, true)}</b><small>${trades} trade${trades === 1 ? '' : 's'} · Deriv bots</small></div>
-    <div class="sm"><span class="eyebrow">Running</span><b>${running}<em>/5</em></b><small>${M && M.ea && M.ea.today ? 'MT5 ' + money(M.ea.today.pnl || 0, true) : 'bots'}</small></div>`;
+    <div class="sm"><span class="eyebrow">Running</span><b>${running}<em>/6</em></b><small>${M && M.ea && M.ea.today ? 'MT5 ' + money(M.ea.today.pnl || 0, true) : 'bots'}</small></div>`;
   if ($('summary').innerHTML !== sum) $('summary').innerHTML = sum;
   const html = bots.map(x => cardHtml(x, real)).join('') + mt5CardHtml();
   if (html !== lastCards) { lastCards = html; $('bots').innerHTML = html;
@@ -274,6 +278,7 @@ function tradeRow(h, showBot) { const t = h.type || h.contract_type, set = h.sta
   const b = BOT[h.bot_id] || BOT.ats; const up = t === 'CALL' || t === 'DIGITOVER' || t === 'DIGITEVEN' || t === 'DIGITMATCH';
   const glyph = t === 'CALL' ? I.up : t === 'PUT' ? I.down : t === 'DIGITEVEN' ? 'E' : t === 'DIGITODD' ? 'O' : t === 'DIGITOVER' ? '&gt;' + esc(h.barrier) : t === 'DIGITUNDER' ? '&lt;' + esc(h.barrier) : t === 'DIGITMATCH' ? '=' + esc(h.barrier) : t === 'DIGITDIFF' ? '≠' + esc(h.barrier) : '·';
   const tags = (h.mode === 'real' ? '<span class="tag real">REAL</span>' : '') + (h.step ? `<span class="tag">step ${h.step}</span>` : '') + (h.capped ? '<span class="tag">capped</span>' : '');
+  if (h.bot_id === 'atsbot') { const w = +h.profit > 0; return `<li><span class="t-ico ${!set || w ? 'u' : 'd'}">${!set ? '·' : w ? I.check : I.x}</span><div class="t-main"><b>${!set ? 'Trade open' : w ? 'Won' : 'Lost'}</b><small>${showBot ? 'ATS Bot · ' : ''}${fmtT(h.t)} · ${money(h.stake)}</small></div><div class="amt ${set ? cls(h.profit) : 'muted'}">${set ? money(h.profit, true) : 'Open'}</div></li>`; }
   return `<li><span class="t-ico ${up ? 'u' : 'd'}">${glyph}</span><div class="t-main"><b>${esc(sideLabel(t, h.barrier))}${tags}</b><small>${showBot ? esc(b.name) + ' · ' : ''}${fmtT(h.t)} · ${money(h.stake)}</small></div><div class="amt ${set ? cls(h.profit) : 'muted'}">${set ? money(h.profit, true) : 'Open'}</div></li>`; }
 
 /* ---------- bot detail ---------- */
@@ -350,6 +355,74 @@ function renderBot() { const st = R.st; if (!st) return; const x = botOf(st, bot
   const br = x.recent.length ? x.recent.slice(0, 10).map(h => tradeRow(Object.assign({ bot_id: x.id }, h))).join('') : '<li class="empty">No trades yet</li>'; if (br !== lastBR) { lastBR = br; $('botRecent').innerHTML = br; }
   mountForm(x); form.patch(x.id === 'ats' ? rfFormValues(x) : x.params); form.setDisabled(x.on);
   $('botFormLock').hidden = !x.on; $('botFormNote').textContent = ''; }
+
+/* ---------- ATS Bot (v4.13): dashboard + big Start button. Never shows what it trades. ---------- */
+const AB_ICON = '<svg viewBox="0 0 24 24"><path d="M13 2.5L4.5 13.5H11l-1 8 8.5-11H12z" fill="currentColor" stroke="none"/></svg>';
+function abChip(x) { const o = x.outcome; return x.on ? (x.running ? ['live', 'Running'] : ['warn', 'Stopping']) : o === 'target' ? ['ok', 'Target hit'] : o === 'stopped' ? ['bad', 'Stopped'] : ['', 'Ready']; }
+function abStatus(x) { const r = x.ab.run || {}, p = x.params;
+  if (x.on && !x.running) return 'Finishing the last trade…';
+  if (x.running) return x.pos ? `Trade open · ${money(x.pos.stake)}` : r.trades ? `Trading · ${r.trades} trade${r.trades === 1 ? '' : 's'} this run` : 'Reading the market…';
+  if (x.outcome === 'target') return `Target hit · ${money(r.pnl, true)} in ${r.trades} trades`;
+  if (x.outcome === 'stopped') return /losses in a row/.test(x.msg || '') ? `Stopped after ${+p.max_consec_losses} losses in a row · ${money(r.pnl, true)}` : (x.msg || 'Stopped');
+  return 'Ready when you are'; }
+/** Level bar toward the target: fills 0 → target, ticks every 10%. */
+function abBar(pnl, target, big) { const t = Math.max(0.01, +target || 1), w = Math.max(0, Math.min(1, (+pnl || 0) / t)) * 100, neg = (+pnl || 0) < 0;
+  return `<div class="ab-bar${big ? ' big' : ''}${neg ? ' neg' : ''}" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(w)}"><i style="width:${w.toFixed(1)}%"></i></div>`; }
+function abCardHtml(x, real) { const [cc, ct] = abChip(x), r = x.ab.run || {}, td = x.ab.today || {}, t = +x.params.target || 1, demoOnly = real;
+  return `<article class="bcard ab-card${x.on ? ' on' : ''}" data-bot="atsbot">
+    <header class="bc-h"><span class="mono ab-mono">${AB_ICON}</span><div class="bc-t"><b>ATS Bot</b><small>Auto trading · target ${money(t)}</small></div><span class="chip ${cc}">${ct}</span></header>
+    <div class="bc-m"><div><span class="eyebrow">Today</span><b class="${cls(td.pnl)}">${money(td.pnl || 0, true)}</b></div><div><span class="eyebrow">This run</span><b class="${cls(r.pnl)}">${money(r.pnl || 0, true)}</b></div><div><span class="eyebrow">Wins</span><b>${td.wins || 0}</b></div><div><span class="eyebrow">Losses</span><b>${td.losses || 0}</b></div></div>
+    ${abBar(r.pnl, t)}<div class="dbar-l"><span>Level ${Math.round((r.progress || 0) * 100)}%</span><span>${money(t)}</span></div>
+    <div class="bc-s"><span>${esc(demoOnly && !x.on ? 'Runs on demo · switch to Demo to start' : abStatus(x))}</span></div>
+    <footer class="bc-f"><button type="button" class="btn ${x.on ? 'ghost' : 'primary'} sm" data-act="go"${R.busy || (x.open && !x.running) || (demoOnly && !x.on) ? ' disabled' : ''}>${x.on ? (x.running ? I.stop + 'Stop' : 'Stopping…') : I.play + 'Start'}</button><button type="button" class="btn ghost sm" data-act="open">Open${I.chev}</button></footer>
+  </article>`; }
+const AB_SCHEMA = [{ title: 'Parameters', fields: [
+  nm('stake', 'Stake', '$', 'First trade of every chain'),
+  nm('mg_factor', 'Martingale', '×', 'Stake × this after a loss, back to the stake after a win'),
+  nm('target', 'Target', '$', 'Stops when this run is up this much'),
+  it('max_consec_losses', 'Stop after', 'losses', 'Losses in a row that end the run')] }];
+let abForm = null, abOpen = false, lastAbHero = '', lastAbRec = '';
+const abVals = p => ({ stake: p.stake, mg_factor: p.mg_factor, target: p.target, max_consec_losses: p.max_consec_losses });
+function abWorst(d) { const s = +d.stake, f = +d.mg_factor, n = Math.round(+d.max_consec_losses); if (!(s > 0 && f >= 1 && n >= 1 && n <= 20)) return '';
+  let sum = 0; for (let i = 0; i < n; i++) sum += Math.round(s * Math.pow(f, i) * 100) / 100; return `Worst case for one run: −${money(sum)} (${n} loss${n === 1 ? '' : 'es'} in a row)`; }
+function abMountForm(x) { if (abForm) return; $('abSave').hidden = true;
+  abForm = new FormCtl($('abForm'), AB_SCHEMA, abVals(x.params), { prefix: 'ab', onChange: f => { $('abSave').hidden = !f.dirty; $('abWorst').textContent = abWorst(f.draft); } });
+  $('abWorst').textContent = abWorst(abVals(x.params)); }
+function abToggle(open) { abOpen = open; $('abParamsBox').hidden = !open; $('abParamsBtn').setAttribute('aria-expanded', String(open)); $('abParamsBtn').classList.toggle('open', open); }
+$('abParamsBtn').onclick = () => abToggle(!abOpen);
+$('abBack').onclick = () => go('home');
+$('abBody').onclick = e => { if (e.target.closest('#abGo')) abGoClick(); };
+async function abGoClick() { const st = R.st; if (!st) return; const x = botOf(st, 'atsbot'); if (!x) return;
+  if (!x.on && isReal(st)) { info('ATS Bot runs on demo', 'Switch the account to Demo to start it.'); return; }
+  if (!x.on && abForm && abForm.dirty) { toast({ level: 'warn', title: 'Save or discard your parameter changes first' }); abToggle(true); return; }
+  await startStop('atsbot'); }
+$('abDiscard').onclick = () => { if (!abForm) return; abForm.discard(); $('abSave').hidden = true; $('abWorst').textContent = abWorst(abForm.draft); };
+$('abSaveBtn').onclick = async () => { if (!abForm || !R.st) return; const ch = abForm.changes();
+  if (Object.values(ch).some(v => v === '' || (typeof v === 'number' && isNaN(v)))) { toast({ level: 'error', title: 'Fill in every field with a number' }); return; }
+  const btn = $('abSaveBtn'); btn.disabled = true;
+  try { await R.saveBot('atsbot', ch); const x = botOf(R.st, 'atsbot'); abForm.saved(abVals(x.params)); $('abSave').hidden = true; $('abWorst').textContent = abWorst(abVals(x.params)); toast({ level: 'win', title: 'Saved', text: 'ATS Bot parameters' }); }
+  catch (e) { errToast(e); } btn.disabled = false; };
+function renderAB() { const st = R.st; if (!st) return; const x = botOf(st, 'atsbot'); if (!x) { go('home'); return; }
+  const real = isReal(st), r = x.ab.run || {}, td = x.ab.today || {}, t = +x.params.target || 1, [cc, ct] = abChip(x), lv = Math.round((r.progress || 0) * 100);
+  const wr = td.trades ? Math.round(td.wins / td.trades * 100) + '%' : '—', blocked = !x.on && real, dis = R.busy || (x.open && !x.running) || blocked;
+  const hero = `<section class="card ab-hero ${x.on ? 'is-on' : 'is-' + x.outcome}">
+      <div class="ab-top"><div class="ab-id"><span class="ab-logo">${AB_ICON}</span><div><h1>ATS Bot</h1><small>Auto trading · ${real ? 'Real selected' : 'Demo'}</small></div></div><span class="chip ${cc}">${ct}</span></div>
+      <div class="ab-profit"><span class="eyebrow">This run</span><div class="ab-big ${cls(r.pnl)}">${money(r.pnl || 0, true)}</div><small>of ${money(t)} target</small></div>
+      <div class="ab-level"><div class="ab-lv-h"><span>Level</span><b>${lv}%</b></div>${abBar(r.pnl, t, true)}<div class="ab-lv-l"><span>$0.00</span><span>${money(t / 2)}</span><span>${money(t)}</span></div></div>
+      <div class="ab-go-wrap"><button type="button" class="ab-go${x.on ? ' on' : ''}${real ? ' real' : ''}" id="abGo"${dis ? ' disabled' : ''} aria-label="${x.on ? 'Stop' : 'Start'} ATS Bot"><span class="ab-ring"></span>${x.on ? (x.running ? I.stop : '') : I.play}</button>
+        <b class="ab-go-l">${x.on ? (x.running ? 'Stop' : 'Stopping…') : x.outcome === 'target' || x.outcome === 'stopped' ? 'Start again' : 'Start'}</b></div>
+      <p class="ab-msg">${esc(blocked ? 'ATS Bot runs on demo. Switch to Demo to start it.' : abStatus(x))}</p>
+    </section>
+    <div class="ab-tiles">
+      <div class="ab-tile"><span class="eyebrow">Today</span><b class="${cls(td.pnl)}">${money(td.pnl || 0, true)}</b><small>${td.trades || 0} trade${td.trades === 1 ? '' : 's'}</small></div>
+      <div class="ab-tile"><span class="eyebrow">Wins</span><b class="up">${td.wins || 0}</b><small>today</small></div>
+      <div class="ab-tile"><span class="eyebrow">Losses</span><b class="${td.losses ? 'dn' : ''}">${td.losses || 0}</b><small>today</small></div>
+      <div class="ab-tile"><span class="eyebrow">Win rate</span><b>${wr}</b><small>today</small></div>
+    </div>`;
+  if (hero !== lastAbHero) { lastAbHero = hero; $('abBody').innerHTML = hero; }
+  const rec = x.recent.length ? x.recent.slice(0, 8).map(h => tradeRow(Object.assign({ bot_id: 'atsbot' }, h))).join('') : '<li class="empty">No trades yet</li>';
+  if (rec !== lastAbRec) { lastAbRec = rec; $('abRecent').innerHTML = rec; }
+  abMountForm(x); abForm.patch(abVals(x.params)); abForm.setDisabled(x.on); $('abLock').hidden = !x.on; if (!abForm.dirty) $('abWorst').textContent = abWorst(abVals(x.params)); }
 
 /* ---------- stats ---------- */
 let statsBot = 'all', histBot = 'all';
@@ -458,10 +531,10 @@ $('pairInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('pair
 
 /* ---------- render loop ---------- */
 function render() { renderHeader();
-  if (view === 'mt5') { if (window.ATSMT5) window.ATSMT5.render(); } else if (view === 'home') renderHome(); else if (view === 'bot') renderBot(); else if (view === 'stats') renderStats(); else if (view === 'history') renderHistory(); else renderSettings(); }
+  if (view === 'mt5') { if (window.ATSMT5) window.ATSMT5.render(); } else if (view === 'home') renderHome(); else if (view === 'bot') renderBot(); else if (view === 'ab') renderAB(); else if (view === 'stats') renderStats(); else if (view === 'history') renderHistory(); else renderSettings(); }
 R.on(() => { pumpEvents(R.st); render(); });
 window.ATSApp = { go, toast, render, setTheme, openAccount, ask, info, money, esc, I, Form: FormCtl, renderHome: () => { if (view === 'home') renderHome(); } };
-function goTo(g) { const [v, a] = String(g || 'home').split(':'); if (['home', 'bot', 'mt5', 'stats', 'history', 'settings'].includes(v)) go(v, a); else go('home'); }
+function goTo(g) { const [v, a] = String(g || 'home').split(':'); if (['home', 'bot', 'ab', 'mt5', 'stats', 'history', 'settings'].includes(v)) go(v, a); else go('home'); }
 { let g0 = null; try { g0 = new URLSearchParams(location.search).get('go'); if (g0) history.replaceState(null, '', location.pathname); } catch (e) { } goTo(g0 || 'home'); }
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'go') goTo(e.data.go); });
 R.kick();

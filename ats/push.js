@@ -37,7 +37,7 @@
       ${err ? `<p class="small" style="color:var(--dn);margin:6px 0 2px">${esc(err)}</p>` : ''}
       ${ok ? TYPES.map(([k, l, s]) => `<div class="row"><div class="l"><b>${l}</b>${s ? `<small>${s}</small>` : ''}</div><label class="switch"><input type="checkbox" data-t="${k}"${t[k] !== false ? ' checked' : ''}><span></span></label></div>`).join('') + `
       <div class="row"><div class="l"><b>Quiet hours</b><small>Trade alerts wait · stops, halts and account changes still come through</small></div><label class="switch"><input type="checkbox" data-q="on"${q.on ? ' checked' : ''}><span></span></label></div>
-      ${q.on ? `<div class="row"><div class="l"><b>From – to</b><small>Bahrain time</small></div><span style="display:flex;gap:6px"><input type="time" class="field" data-q="from" value="${esc(q.from)}" style="width:96px;padding:6px"><input type="time" class="field" data-q="to" value="${esc(q.to)}" style="width:96px;padding:6px"></span></div>` : ''}
+      ${q.on ? `<div class="row"><div class="l"><b>From – to</b></div><span style="display:flex;gap:6px"><input type="time" class="field" data-q="from" value="${esc(q.from)}" style="width:96px;padding:6px"><input type="time" class="field" data-q="to" value="${esc(q.to)}" style="width:96px;padding:6px"></span></div>` : ''}
       <p class="muted small" style="margin:8px 0 0">Trade alerts are limited to about one per bot per minute.</p>` : ''}`;
     el.querySelectorAll('[data-p]').forEach(b => b.onclick = () => (b.dataset.p === 'on' ? enable : b.dataset.p === 'off' ? off : test)());
     el.querySelectorAll('[data-t]').forEach(c => c.onchange = () => save({ types: { [c.dataset.t]: c.checked } }));

@@ -94,7 +94,7 @@
     num('max_consec_losses', 1, 50, 'Max losses in a row');
     num('max_stake', MIN_STAKE, 1000, 'Max stake cap');
     if (p.martingale) { num('mg_factor', 1.01, 20, 'Martingale factor'); num('mg_max_steps', 1, 10, 'Martingale max steps'); }
-    if (!['analysis', 'up', 'down', 'alternate'].includes(p.direction)) errs.push('Pick a direction mode');
+    if (!['analysis', 'topdown', 'up', 'down', 'alternate'].includes(p.direction)) errs.push('Pick a direction mode');
     if (p.strategy != null && !STRATEGIES[p.strategy]) errs.push('Pick a strategy');
     if (p.strategy === 'model10m') {
       num('model_stake', MIN_STAKE, 1000, 'Model stake'); num('day_tp', 0.01, 1000, 'Daily profit lock'); num('day_sl', 0.01, 1000, 'Daily stop');

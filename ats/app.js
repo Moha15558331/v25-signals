@@ -1,9 +1,9 @@
-/* ATS v4.9 app: remote control + dashboard. Bots: Rise and Fall (server), Even/Odd, Over/Under, Matches/Differs (server, demo) and the MT5 bot.
+/* ATS v4.11 app: remote control + dashboard. Bots: Rise and Fall (server), Even/Odd, Over/Under, Matches/Differs (server, demo) and the MT5 bot.
  * Views: Home, Bot detail, MT5, Stats, History, Settings.
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.10.1';
+const APP_VER = '4.11.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -109,14 +109,15 @@ function formsBusy() { for (const f of FORMS) if (f.busy()) return true; return 
 class FormCtl {
   /** schema: [{ title, fields: [{ k, label, type: 'n'|'i'|'b'|'sel'|'s', unit, opts, show(draft), hint }] }] */
   constructor(el, schema, values, opts = {}) { this.el = el; this.schema = schema; this.opts = opts; this.base = Object.assign({}, values); this.draft = Object.assign({}, values); this.dirty = false; this.disabled = null; this.build(); FORMS.add(this); }
-  fields() { return this.schema.flatMap(g => g.fields); }
+  fields() { return this.schema.flatMap(g => g.fields).filter(f => f.type !== 'note'); }
+  rows() { return this.schema.flatMap(g => g.fields); }
   ctl(f) { const v = this.draft[f.k], id = `${this.opts.prefix || 'f'}_${f.k}`;
     if (f.type === 'b') return `<label class="switch"><input type="checkbox" id="${id}" data-k="${f.k}"${v === true || v === 1 || v === '1' || v === 'true' ? ' checked' : ''}><span></span></label>`;
     if (f.type === 'sel') return `<select id="${id}" data-k="${f.k}">${(typeof f.opts === 'function' ? f.opts(this.draft) : f.opts).map(o => `<option value="${esc(o[0])}"${String(o[0]) === String(v) ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`;
     const num = f.type === 'n' || f.type === 'i';
     return `<span class="inp${num ? '' : ' wide'}">${f.unit === '$' ? '<i>$</i>' : ''}<input id="${id}" type="text" ${num ? `inputmode="${f.type === 'i' ? 'numeric' : 'decimal'}"` : 'autocapitalize="off"'} autocomplete="off" autocorrect="off" spellcheck="false" enterkeyhint="done" data-k="${f.k}" value="${esc(v == null ? '' : v)}">${f.unit && f.unit !== '$' ? `<i>${esc(f.unit)}</i>` : ''}</span>`; }
   build() {
-    this.el.innerHTML = this.schema.map(g => `<fieldset class="fgroup"><legend>${esc(g.title)}</legend>${g.fields.map(f => `<div class="frow" data-row="${f.k}"><label for="${this.opts.prefix || 'f'}_${f.k}"><b>${esc(f.label)}</b>${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</label>${this.ctl(f)}</div>`).join('')}</fieldset>`).join('');
+    this.el.innerHTML = this.schema.map(g => `<fieldset class="fgroup"><legend>${esc(g.title)}</legend>${g.fields.map(f => f.type === 'note' ? `<div class="frow" data-row="${f.k}"><p class="muted small" style="margin:0">${esc(f.hint)}</p></div>` : `<div class="frow" data-row="${f.k}"><label for="${this.opts.prefix || 'f'}_${f.k}"><b>${esc(f.label)}</b>${f.hint ? `<small>${esc(f.hint)}</small>` : ''}</label>${this.ctl(f)}</div>`).join('')}</fieldset>`).join('');
     this.el.querySelectorAll('[data-k]').forEach(inp => { const f = this.fields().find(x => x.k === inp.dataset.k);
       const read = () => { const raw = inp.type === 'checkbox' ? inp.checked : inp.value;
         this.draft[f.k] = f.type === 'b' ? !!raw : (f.type === 'n' || f.type === 'i') ? (String(raw).trim() === '' ? '' : +String(raw).replace(',', '.')) : (f.num ? +raw : raw);
@@ -125,7 +126,7 @@ class FormCtl {
       if (inp.tagName === 'INPUT' && inp.type === 'text') inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); }); });
     this.applyShow();
   }
-  applyShow() { for (const f of this.fields()) if (f.show) { const row = this.el.querySelector(`[data-row="${f.k}"]`); const vis = !!f.show(this.draft); if (row && row.hidden === vis) row.hidden = !vis; } }
+  applyShow() { for (const f of this.rows()) if (f.show) { const row = this.el.querySelector(`[data-row="${f.k}"]`); const vis = !!f.show(this.draft); if (row && row.hidden === vis) row.hidden = !vis; } }
   /** New server values: update only inputs that are not focused, and nothing at all while there are unsaved edits. */
   patch(values) { this.base = Object.assign({}, values); if (this.dirty) return;
     const act = document.activeElement; this.draft = Object.assign({}, values);
@@ -147,8 +148,11 @@ const sw = (k, label, hint, show) => ({ k, label, type: 'b', hint, show });
 const nm = (k, label, unit, hint, show) => ({ k, label, type: 'n', unit, hint, show });
 const it = (k, label, unit, hint, show) => ({ k, label, type: 'i', unit, hint, show });
 const mgOn = d => !!d.martingale, sesOn = d => !!d.ses_on;
+const RF_DIRS = [['analysis', 'Our analysis'], ['topdown', 'Top-down zones']];
 const RF_SCHEMA = [
-  { title: 'Trade', fields: [nm('stake', 'Stake', '$'), { k: 'cycle', label: 'Candle', type: 'sel', opts: [['1m', '1 minute'], ['5m', '5 minutes'], ['15m', '15 minutes'], ['30m', '30 minutes'], ['1h', '1 hour']] }] },
+  { title: 'Trade', fields: [nm('stake', 'Stake', '$'), { k: 'direction', label: 'Direction', type: 'sel', opts: d => RF_DIRS.concat(RF_DIRS.some(o => o[0] === d.direction) ? [] : [[d.direction, d.direction]]) },
+    { k: 'cycle', label: 'Candle', type: 'sel', opts: [['1m', '1 minute'], ['5m', '5 minutes'], ['15m', '15 minutes'], ['30m', '30 minutes'], ['1h', '1 hour']] },
+    { k: 'td_note', label: 'Top-down zones', type: 'note', hint: 'Trades only when price is at a strong zone edge with a 1-minute confirmation; otherwise it skips. Any minute, contract runs for the candle. Backtest: 15 minutes was best, 55.7% on unseen data (break-even 53.2% at $0.35), about 4 trades a day. Not a proven edge.', show: d => d.direction === 'topdown' }] },
   { title: 'Martingale', fields: [sw('martingale', 'Martingale'), nm('mg_factor', 'Factor', '×', '', mgOn), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn)] },
   { title: 'Sessions', fields: [sw('ses_on', 'Sessions'), it('ses_count', 'Sessions per day', '', '', sesOn), nm('ses_tp', 'Session target', '$', '', sesOn), nm('ses_sl', 'Session stop', '$', '', sesOn), it('ses_pause', 'Pause between', 's', '', sesOn)] },
   { title: 'Daily limits', fields: [nm('day_tp', 'Daily lock', '$'), nm('day_sl', 'Daily stop', '$'), it('max_consec_losses', 'Max losses in a row')] },
@@ -290,7 +294,7 @@ $('botSaveBtn').onclick = async () => { if (!form || !R.st) return; const ch = f
 function analysisHtml(x) {
   if (x.id === 'ats') { const s = x.signal || {}, sk = x.skip;
     return `<section class="card"><div class="card-h"><h3>Signal</h3><span class="muted">${s.at ? hm(s.at) : ''}</span></div>
-      <div class="sig"><span class="sig-dir ${s.dir === 'up' ? 'up' : s.dir === 'down' ? 'dn' : ''}">${s.dir === 'up' ? I.up + 'Rise' : s.dir === 'down' ? I.down + 'Fall' : 'Neutral'}</span><b>${s.conf != null ? s.conf + '%' : '—'}</b><small>${esc(s.tf || '')} candles · lean ${esc(s.lean || '—')}</small></div>
+      <div class="sig"><span class="sig-dir ${s.dir === 'up' ? 'up' : s.dir === 'down' ? 'dn' : ''}">${s.dir === 'up' ? I.up + 'Rise' : s.dir === 'down' ? I.down + 'Fall' : 'Neutral'}</span><b>${s.conf != null ? s.conf + '%' : '—'}</b><small>${s.note ? esc(s.note) : `${esc(s.tf || '')} candles · lean ${esc(s.lean || '—')}`}</small></div>
       ${sk ? `<p class="muted small">Last skip ${hm(sk.at)}: ${esc(sk.why)}</p>` : ''}</section>`; }
   const an = x.analysis; if (!an || !an.a || an.a.even_pct == null) return `<section class="card"><div class="card-h"><h3>Analysis</h3></div><p class="muted">${x.on ? 'Reading the market…' : '—'}</p></section>`;
   return digitPanel(x, an); }

@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.11.0';
+const APP_VER = '4.12.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -152,7 +152,10 @@ const RF_DIRS = [['analysis', 'Our analysis'], ['topdown', 'Top-down zones']];
 const RF_SCHEMA = [
   { title: 'Trade', fields: [nm('stake', 'Stake', '$'), { k: 'direction', label: 'Direction', type: 'sel', opts: d => RF_DIRS.concat(RF_DIRS.some(o => o[0] === d.direction) ? [] : [[d.direction, d.direction]]) },
     { k: 'cycle', label: 'Candle', type: 'sel', opts: [['1m', '1 minute'], ['5m', '5 minutes'], ['15m', '15 minutes'], ['30m', '30 minutes'], ['1h', '1 hour']] },
-    { k: 'td_note', label: 'Top-down zones', type: 'note', hint: 'Trades only when price is at a strong zone edge with a 1-minute confirmation; otherwise it skips. Any minute, contract runs for the candle. Backtest: 15 minutes was best, 55.7% on unseen data (break-even 53.2% at $0.35), about 4 trades a day. Not a proven edge.', show: d => d.direction === 'topdown' }] },
+    { k: 'td_setup', label: 'Setup', type: 'sel', opts: [['zones', 'Zones'], ['retest', 'Break & retest'], ['fib', 'Retest + Fib'], ['score', 'Confluence score']], show: d => d.direction === 'topdown' },
+    { k: 'td_note', label: 'Top-down zones', type: 'note', hint: 'Trades only when price is at a strong zone edge with a 1-minute confirmation; otherwise it skips. Any minute, contract runs for the candle. Backtest: 15 minutes was best, 55.7% on unseen data (break-even 53.2% at $0.35), about 4 trades a day. Not a proven edge.', show: d => d.direction === 'topdown' && (d.td_setup || 'zones') === 'zones' },
+    { k: 'td_note2', label: 'Setup', type: 'note', hint: 'H1 break, pullback into the flipped zone, 1-minute rejection. Backtest Jul–Nov: about 50% at every expiry (break-even 53.2%). Not a proven edge.', show: d => d.direction === 'topdown' && (d.td_setup === 'retest' || d.td_setup === 'fib') },
+    { k: 'td_note3', label: 'Setup', type: 'note', hint: 'Points for zone, flip, break, sweep and candle pattern; trades at 4+ after a 1-minute rejection. Backtest on unseen data: 51.5% at 15 minutes (break-even 53.2%). Not a proven edge.', show: d => d.direction === 'topdown' && d.td_setup === 'score' }] },
   { title: 'Martingale', fields: [sw('martingale', 'Martingale'), nm('mg_factor', 'Factor', '×', '', mgOn), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn)] },
   { title: 'Sessions', fields: [sw('ses_on', 'Sessions'), it('ses_count', 'Sessions per day', '', '', sesOn), nm('ses_tp', 'Session target', '$', '', sesOn), nm('ses_sl', 'Session stop', '$', '', sesOn), it('ses_pause', 'Pause between', 's', '', sesOn)] },
   { title: 'Daily limits', fields: [nm('day_tp', 'Daily lock', '$'), nm('day_sl', 'Daily stop', '$'), it('max_consec_losses', 'Max losses in a row')] },

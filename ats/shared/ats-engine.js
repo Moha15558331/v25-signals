@@ -10,7 +10,7 @@
   const BOT = {
     key: 'risefall', name: 'Rise / Fall', short: 'R/F', icon: 'rf',
     desc: 'CALL / PUT on Volatility 25 (1s). Our analysis picks the side. Martingale ×2.1.',
-    defaults: { stake: 0.35, cycle: '5m', custom_n: 10, custom_u: 'm', ticks: 5, align: true, direction: 'analysis',
+    defaults: { stake: 0.35, cycle: '5m', custom_n: 10, custom_u: 'm', ticks: 5, align: true, direction: 'analysis', td_setup: 'zones',
       martingale: true, mg_factor: 2.1, mg_max_steps: 3, mg_reset_win: true,
       session_sl: 6, session_tp: 3, max_consec_losses: 4, max_stake: 3.5,
       // strategy: 'hybrid' = the ATS bot (Differs on the least digit, Over 2 / Under 7 recovery; shared/hybrid.js, server only),

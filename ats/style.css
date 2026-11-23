@@ -341,5 +341,6 @@ html[data-theme=light] .dg-panel{--g:#0f9f6e;--gb:#e8f8f1;--gl:#9ad9c0;--r_:#e11
 .ab-ph svg{color:var(--tx3);transition:transform .2s}.ab-ph.open svg{transform:rotate(180deg)}
 #abParamsBox{padding:0 var(--pad) var(--pad);border-top:1px solid var(--line)}
 #abParamsBox .fgroup legend{display:none}
+#abActBox{padding:0 var(--pad) 6px;border-top:1px solid var(--line)}
 .ab-worst{margin:8px 0 0}
 @media (prefers-reduced-motion:reduce){.ab-bar i{transition:none}}

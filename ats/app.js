@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.14.0';
+const APP_VER = '4.15.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -392,6 +392,9 @@ function abMountForm(x) { if (abForm) return; $('abSave').hidden = true;
   $('abWorst').textContent = abWorst(abVals(x.params)); }
 function abToggle(open) { abOpen = open; $('abParamsBox').hidden = !open; $('abParamsBtn').setAttribute('aria-expanded', String(open)); $('abParamsBtn').classList.toggle('open', open); }
 $('abParamsBtn').onclick = () => abToggle(!abOpen);
+let abActOpen = false; // v4.15: Activity collapsed like Parameters until opened
+function abActToggle(open) { abActOpen = open; $('abActBox').hidden = !open; $('abActBtn').setAttribute('aria-expanded', String(open)); $('abActBtn').classList.toggle('open', open); }
+$('abActBtn').onclick = () => abActToggle(!abActOpen);
 $('abBack').onclick = () => go('home');
 $('abBody').onclick = e => { if (e.target.closest('#abGo')) abGoClick(); };
 async function abGoClick() { const st = R.st; if (!st) return; const x = botOf(st, 'atsbot'); if (!x) return;
@@ -420,6 +423,7 @@ function renderAB() { const st = R.st; if (!st) return; const x = botOf(st, 'ats
   if (hero !== lastAbHero) { lastAbHero = hero; $('abBody').innerHTML = hero; }
   const rec = x.recent.length ? x.recent.slice(0, 8).map(h => tradeRow(Object.assign({ bot_id: 'atsbot' }, h))).join('') : '<li class="empty">No trades yet</li>';
   if (rec !== lastAbRec) { lastAbRec = rec; $('abRecent').innerHTML = rec; }
+  const sub = td.trades ? `${td.trades} trade${td.trades === 1 ? '' : 's'} today` : 'No trades today'; if ($('abActSub').textContent !== sub) $('abActSub').textContent = sub;
   abMountForm(x); abForm.patch(abVals(x.params)); abForm.setDisabled(x.on); $('abLock').hidden = !x.on; if (!abForm.dirty) $('abWorst').textContent = abWorst(abVals(x.params)); }
 
 /* ---------- stats ---------- */

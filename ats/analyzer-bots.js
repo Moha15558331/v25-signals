@@ -271,7 +271,9 @@
       w.onclose = () => { T.ok = false; Object.values(T.pend).forEach(p => p.rej(new Error('Trade offline'))); T.pend = {}; };
       w.onmessage = e => { let m; try { m = JSON.parse(e.data); } catch (_) { return; } const p = T.pend[m.req_id]; if (!p) return; delete T.pend[m.req_id]; m.error ? p.rej(new Error(m.error.message || 'Error')) : p.res(m); }; });
   }
-  function tsend(q) { return new Promise((res, rej) => { if (!T.ws || T.ws.readyState !== 1) return rej(new Error('Trade offline')); const id = T.id++; T.pend[id] = { res, rej }; T.ws.send(JSON.stringify(Object.assign({}, q, { req_id: id }))); setTimeout(() => { if (T.pend[id]) { delete T.pend[id]; rej(new Error('Timeout')); } }, 15000); }); }
+  // reconnects once if the trade socket dropped (e.g. phone slept) so an open contract can still be read back
+  async function tsend(q) { if (!T.ws || T.ws.readyState !== 1) { try { await tradeOpen(); } catch (e) { throw new Error('Trade offline'); } } return tsend1(q); }
+  function tsend1(q) { return new Promise((res, rej) => { if (!T.ws || T.ws.readyState !== 1) return rej(new Error('Trade offline')); const id = T.id++; T.pend[id] = { res, rej }; T.ws.send(JSON.stringify(Object.assign({}, q, { req_id: id }))); setTimeout(() => { if (T.pend[id]) { delete T.pend[id]; rej(new Error('Timeout')); } }, 15000); }); }
 
   function panelHTML(id) {
     const B = BOTS[id], [a, b] = B.sides, dir = B.sig === 'dir';

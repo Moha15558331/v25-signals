@@ -1,0 +1,30 @@
+/* Deriv ATS · Analyzer theme (v4.19). Loaded after style.css: same palette, cards and
+ * buttons as Deriv Analyzer, so both halves of the app look like one. Gold stays for Real. */
+html[data-theme=dark]{--bg:#0a0e17;--bg2:#0c111b;--s1:#121826;--s2:#0c111b;--s3:#1a2435;--line:#1e2a3d;--line2:#2a3a50;--tx:#e8edf5;--tx2:#a9b6c8;--tx3:#7a8ba3;
+  --acc:#2ee59d;--acc-bg:#0f2a22;--acc-line:#1a4a3a;--acc-tx:#0a0e17;--up:#2ee59d;--up-bg:rgba(46,229,157,.12);--dn:#ff5c6c;--dn-bg:rgba(255,92,108,.12);
+  --gold:#fbbf24;--gold2:#d99a12;--gold-bg:rgba(251,191,36,.13);--shadow:0 8px 28px rgba(0,0,0,.35);--blur:rgba(10,14,23,.86)}
+html[data-theme=light]{--bg:#eef1f6;--bg2:#f4f6fa;--s1:#ffffff;--s2:#f4f6fa;--s3:#e8edf5;--line:#d5dbe7;--line2:#c5cedd;--tx:#121826;--tx2:#475569;--tx3:#64748b;
+  --acc:#0f9f6e;--acc-bg:#e8f8f1;--acc-line:#9ad9c0;--acc-tx:#fff;--up:#0f9f6e;--up-bg:rgba(15,159,110,.09);--dn:#e11d48;--dn-bg:rgba(225,29,72,.08);
+  --gold:#d97706;--gold2:#b45309;--gold-bg:rgba(217,119,6,.1);--shadow:0 8px 28px rgba(15,23,42,.08);--blur:rgba(238,241,246,.9)}
+html.is-real{--acc:var(--gold);--acc-bg:var(--gold-bg);--acc-line:var(--gold)}
+html,body{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+.card,.bc,.bot-card{border-radius:16px;box-shadow:var(--shadow)}
+html[data-theme=dark] .card{box-shadow:none}
+/* buttons: soft tinted pills like the Analyzer's Start */
+.btn{height:36px;border-radius:11px;font-weight:700;font-size:13.5px}
+.btn.sm{height:32px;border-radius:10px;font-size:12.5px}
+.btn.primary{background:var(--acc-bg);border-color:var(--acc-line);color:var(--acc)}
+.btn.primary:active{filter:brightness(1.05)}
+html.is-real .btn.primary{background:var(--gold-bg);border-color:var(--gold);color:var(--gold)}
+.btn.real{background:var(--gold-bg);border-color:var(--gold);color:var(--gold)}
+.btn.danger{background:var(--dn-bg);border-color:transparent;color:var(--dn)}
+/* header: ☰ + "Deriv ATS" like the Analyzer */
+.shell-menu{width:34px;height:34px;border-radius:10px;border:1px solid var(--line);background:var(--s2);color:var(--tx);display:inline-flex;align-items:center;justify-content:center;flex:none;padding:0}
+.shell-menu svg{width:18px;height:18px}
+.top-inner{gap:10px}
+.brand .logo{display:none}
+.brand b{font-weight:800;letter-spacing:0;font-size:17px}.brand b i{font-style:normal;color:#ff5c6c}
+html[data-theme=light] .brand b i{color:#e11d48}
+.page-title{font-weight:800}
+.tabbar button.on svg{color:var(--acc)}
+.chip,.badge{font-weight:700}

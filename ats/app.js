@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.18.0';
+const APP_VER = '4.19.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -364,10 +364,11 @@ const abLock = x => (x.ab && x.ab.lock) || null;
 function abChip(x) { const o = x.outcome; return x.on ? (x.running ? ['live', 'Running'] : ['warn', 'Stopping']) : o === 'target' ? ['ok', 'Target hit'] : o === 'stopped' ? ['bad', 'Stopped'] : o === 'halted' ? ['bad', 'Halted'] : ['', 'Ready']; }
 function abStatus(x) { const td = x.ab.today || {}, lk = abLock(x);
   if (x.on && !x.running) return 'Finishing the last trade…';
-  if (x.running) return x.pos ? `Trade open · ${money(x.pos.stake)}` : td.trades ? `Trading · ${td.trades} trade${td.trades === 1 ? '' : 's'} today` : 'Reading the market…';
+  if (x.running) return x.pos ? `Trade open · ${money(x.pos.stake)}` : /^Analysing/.test(x.msg || '') ? 'Analysing…' : td.trades ? `Trading · ${td.trades} trade${td.trades === 1 ? '' : 's'} today` : 'Reading the market…';
   if (lk) return lk.text;
   if (x.outcome === 'halted') return x.msg || 'Stopped';
   return 'Ready'; }
+const abAnalysing = x => !!(x.running && !x.pos && /^Analysing/.test(x.msg || ''));
 function abBar(pnl, target) { const t = Math.max(0.01, +target || 1), w = Math.max(0, Math.min(1, (+pnl || 0) / t)) * 100;
   return `<div class="ab-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(w)}"><i style="width:${w.toFixed(1)}%"></i></div>`; }
 const abWr = td => td.trades ? Math.round(td.wins / td.trades * 100) + '%' : '—';
@@ -376,16 +377,18 @@ function abCardHtml(x, real) { const [cc, ct] = abChip(x), td = x.ab.today || {}
     <header class="bc-h"><span class="mono ab-mono">${AB_ICON}</span><div class="bc-t"><b>ATS Bot</b><small>Auto trading · target ${money(t)}</small></div><span class="chip ${cc}">${ct}</span></header>
     <div class="bc-m"><div><span class="eyebrow">Today</span><b class="${cls(td.pnl)}">${money(td.pnl || 0, true)}</b></div><div><span class="eyebrow">Wins</span><b>${td.wins || 0}</b></div><div><span class="eyebrow">Losses</span><b>${td.losses || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${abWr(td)}</b></div></div>
     ${abBar(td.pnl, t)}
-    <div class="bc-s"><span>${!x.on && lk ? I.lock : ''}${esc(abStatus(x))}</span><span class="ab-pct">${Math.round((x.ab.progress || 0) * 100)}%</span></div>
+    <div class="bc-s"><span${abAnalysing(x) ? ' class="ab-analysing"' : ''}>${!x.on && lk ? I.lock : ''}${esc(abStatus(x))}</span><span class="ab-pct">${Math.round((x.ab.progress || 0) * 100)}%</span></div>
     <footer class="bc-f"><button type="button" class="btn ${x.on ? 'ghost' : real ? 'real' : 'primary'} sm" data-act="go"${dis ? ' disabled' : ''}>${x.on ? (x.running ? I.stop + 'Stop' : 'Stopping…') : lk ? I.lock + 'Locked' : I.play + 'Start'}</button><button type="button" class="btn ghost sm" data-act="open">Open${I.chev}</button></footer>
   </article>`; }
 const AB_SCHEMA = [{ title: 'Parameters', fields: [
   nm('stake', 'Stake', '$', 'First trade of every chain'),
   nm('payout_pct', 'Payout', '%', 'Profit per win; the recovery stake is sized from live prices'),
   nm('target', 'Daily target', '$', 'Locks for the day when today is up this much'),
-  it('max_consec_losses', 'Stop after', 'losses', 'Losses in a row that end the day')] }];
+  it('max_consec_losses', 'Stop after', 'losses', 'Losses in a row that end the day'),
+  it('pause_win', 'Pause after win', 's', 'Wait, then a fresh read'),
+  it('pause_loss', 'Pause after loss', 's', 'Wait before the next trade')] }];
 let abForm = null, abOpen = false, lastAbHero = '', lastAbRec = '';
-const abVals = p => ({ stake: p.stake, payout_pct: p.payout_pct != null ? p.payout_pct : 25, target: p.target, max_consec_losses: p.max_consec_losses });
+const abVals = p => ({ stake: p.stake, payout_pct: p.payout_pct != null ? p.payout_pct : 25, target: p.target, max_consec_losses: p.max_consec_losses, pause_win: p.pause_win != null ? p.pause_win : 5, pause_loss: p.pause_loss != null ? p.pause_loss : 30 });
 let abRec = null; // v4.17: recovery sized by the server from live quotes (stakes, factor, worst)
 function abWorst(d) { const s = +d.stake, pct = +d.payout_pct, n = Math.round(+d.max_consec_losses); if (!(s > 0 && pct > 0 && n >= 1 && n <= 20)) return '';
   const r = abRec, same = r && r.stakes && r.stakes[0] === s && r.stakes.length === n;
@@ -432,7 +435,7 @@ function renderAB() { const st = R.st; if (!st) return; const x = botOf(st, 'ats
       ${abBar(td.pnl, t)}
       <div class="ab-lv"><span>${lv}% of target</span><span>${money(Math.max(0, t - (+td.pnl || 0)))} to go</span></div>
       <div class="ab-stats"><div><span class="eyebrow">Wins</span><b class="up">${td.wins || 0}</b></div><div><span class="eyebrow">Losses</span><b class="${td.losses ? 'dn' : ''}">${td.losses || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${abWr(td)}</b></div><div><span class="eyebrow">Trades</span><b>${td.trades || 0}</b></div></div>
-      <div class="ab-act"><div class="ab-st"><p class="ab-msg${locked ? ' locked' : ''}">${locked ? I.lock : ''}<span>${esc(abStatus(x))}</span></p>${!real && x.ab.can_reset && !x.on && (lk || td.trades) ? `<button type="button" class="ab-reset" id="abReset"${R.busy ? ' disabled' : ''}>${AB_RESET}<span>Reset day</span></button>` : ''}</div>
+      <div class="ab-act"><div class="ab-st"><p class="ab-msg${locked ? ' locked' : ''}${abAnalysing(x) ? ' analysing' : ''}">${locked ? I.lock : ''}<span>${esc(abStatus(x))}</span></p>${!real && x.ab.can_reset && !x.on && (lk || td.trades) ? `<button type="button" class="ab-reset" id="abReset"${R.busy ? ' disabled' : ''}>${AB_RESET}<span>Reset day</span></button>` : ''}</div>
         <button type="button" class="ab-go${x.on ? ' on' : ''}${real ? ' real' : ''}" id="abGo"${dis ? ' disabled' : ''} aria-label="${x.on ? 'Stop' : 'Start'} ATS Bot">${btn}</button></div>
     </section>`;
   if (hero !== lastAbHero) { lastAbHero = hero; $('abBody').innerHTML = hero; }

@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.16.0';
+const APP_VER = '4.17.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -381,13 +381,19 @@ function abCardHtml(x, real) { const [cc, ct] = abChip(x), td = x.ab.today || {}
   </article>`; }
 const AB_SCHEMA = [{ title: 'Parameters', fields: [
   nm('stake', 'Stake', '$', 'First trade of every chain'),
-  nm('mg_factor', 'Martingale', '×', 'Stake × this after a loss, back to the stake after a win'),
+  nm('payout_pct', 'Payout', '%', 'Profit per win; the recovery stake is sized from live prices'),
   nm('target', 'Daily target', '$', 'Locks for the day when today is up this much'),
   it('max_consec_losses', 'Stop after', 'losses', 'Losses in a row that end the day')] }];
 let abForm = null, abOpen = false, lastAbHero = '', lastAbRec = '';
-const abVals = p => ({ stake: p.stake, mg_factor: p.mg_factor, target: p.target, max_consec_losses: p.max_consec_losses });
-function abWorst(d) { const s = +d.stake, f = +d.mg_factor, n = Math.round(+d.max_consec_losses); if (!(s > 0 && f >= 1 && n >= 1 && n <= 20)) return '';
-  let sum = 0; for (let i = 0; i < n; i++) sum += Math.round(s * Math.pow(f, i) * 100) / 100; return `Worst case for one day: −${money(sum)} (${n} loss${n === 1 ? '' : 'es'} in a row)`; }
+const abVals = p => ({ stake: p.stake, payout_pct: p.payout_pct != null ? p.payout_pct : 25, target: p.target, max_consec_losses: p.max_consec_losses });
+let abRec = null; // v4.17: recovery sized by the server from live quotes (stakes, factor, worst)
+function abWorst(d) { const s = +d.stake, pct = +d.payout_pct, n = Math.round(+d.max_consec_losses); if (!(s > 0 && pct > 0 && n >= 1 && n <= 20)) return '';
+  const r = abRec, same = r && r.stakes && r.stakes[0] === s && r.stakes.length === n;
+  let ch = same ? r.stakes.slice() : null;
+  if (!ch) { const prof = Math.ceil(s * (1 + pct / 100) * 100 - 1e-6) / 100 - s, ratio = r && r.ratio ? r.ratio : 0.27; ch = [s]; let loss = s;
+    for (let i = 1; i < n; i++) { const st = Math.ceil((loss + prof) / ratio * 100) / 100; ch.push(st); loss += st; } }
+  const worst = ch.reduce((a, b) => a + b, 0), ap = same ? '' : '≈ ';
+  return n > 1 ? `Recovery ${ap}${money(ch[1])} (×${(ch[1] / s).toFixed(2)}) · worst case for one day −${ap}${money(worst)}` : `Worst case for one day −${money(worst)}`; }
 function abMountForm(x) { if (abForm) return; $('abSave').hidden = true;
   abForm = new FormCtl($('abForm'), AB_SCHEMA, abVals(x.params), { prefix: 'ab', onChange: f => { $('abSave').hidden = !f.dirty; $('abWorst').textContent = abWorst(f.draft); } });
   $('abWorst').textContent = abWorst(abVals(x.params)); }
@@ -427,7 +433,7 @@ function renderAB() { const st = R.st; if (!st) return; const x = botOf(st, 'ats
   const rec = x.recent.length ? x.recent.slice(0, 8).map(h => tradeRow(Object.assign({ bot_id: 'atsbot' }, h))).join('') : '<li class="empty">No trades yet</li>';
   if (rec !== lastAbRec) { lastAbRec = rec; $('abRecent').innerHTML = rec; }
   const sub = td.trades ? `${td.trades} trade${td.trades === 1 ? '' : 's'} today` : x.recent.length ? 'Recent trades' : 'No trades yet'; if ($('abActSub').textContent !== sub) $('abActSub').textContent = sub;
-  abMountForm(x); abForm.patch(abVals(x.params)); abForm.setDisabled(x.on); $('abLock').hidden = !x.on; if (!abForm.dirty) $('abWorst').textContent = abWorst(abVals(x.params)); }
+  abRec = x.ab.recovery || abRec; abMountForm(x); abForm.patch(abVals(x.params)); abForm.setDisabled(x.on); $('abLock').hidden = !x.on; if (!abForm.dirty) $('abWorst').textContent = abWorst(abVals(x.params)); }
 
 /* ---------- stats ---------- */
 let statsBot = 'all', histBot = 'all';

@@ -96,3 +96,58 @@ test('Runner end to end with a fake broker: auto recovery + stop at TP', async (
   assert.ok(r.hist[r.hist.length - 2].pl >= 0.35, 'recovery win covers the loss');
   assert.ok(st.sessionPL >= 0.3); assert.equal(st.consec, 0);
 });
+
+/* ---- Auto barrier: payout-targeted search ---- */
+const model = (scale, dec, opts = {}) => async off => { // ratio as a smooth monotonic function of the offset
+  if (opts.min && off < opts.min) return { near: true };
+  const r = dec ? 0.9 * Math.exp(-off / scale) : 0.2 * Math.exp(off / scale);
+  if (r < 0.02) return { ratio: 0 };
+  return { ratio: +r.toFixed(4), prop: { id: 'p' + off, ask_price: 1, payout: 1 + r } };
+};
+test('searchBarrier hits the target within ±1.5 pts (farther pays less)', async () => {
+  for (const [scale, start] of [[40, 5], [40, 400], [0.12, 0.01], [900, 3]]) {
+    const f = await C.searchBarrier(model(scale, true), { dec: true, target: 25, start, pip: scale < 1 ? 3 : 2 });
+    assert.ok(f && f.hit, 'scale ' + scale); assert.ok(Math.abs(f.ratio - 0.25) <= 0.015, String(f.ratio)); assert.ok(f.tries <= 8, 'tries ' + f.tries);
+  }
+});
+test('searchBarrier works when farther pays more (Touch / Out) and past a "too close" limit', async () => {
+  const f = await C.searchBarrier(model(30, false, { min: 20 }), { dec: false, target: 100, start: 5, pip: 2 });
+  assert.ok(f && Math.abs(f.ratio - 1) <= 0.015, JSON.stringify(f && f.ratio)); assert.ok(f.off >= 20);
+});
+test('searchBarrier treats "no return" as 0 and returns null when the target is out of reach', async () => {
+  assert.equal(await C.searchBarrier(model(40, true), { dec: true, target: 95, start: 10, pip: 2 }), null); // max 90 %
+  const near = await C.searchBarrier(model(40, true), { dec: true, target: 89, start: 200, pip: 2, reach: 5 });
+  assert.ok(near && near.ratio > 0.84);
+});
+test('barrierStr: signs and decimals', () => {
+  assert.deepEqual(C.barrierStr('hl', 'higher', 62.456, 2), { barrier: '-62.46', off: 62.46 });
+  assert.equal(C.barrierStr('hl', 'lower', 1, 3).barrier, '+1.000');
+  assert.deepEqual(C.barrierStr('sg', 'in', 1.2346, 3), { barrier: '+1.235', barrier2: '-1.235', off: 1.235 });
+  assert.equal(C.barrierStr('tn', 'touch', 5, 2, -1).barrier, '-5.00'); assert.equal(C.barrierStr('tn', 'notouch', 5, 2, -1).barrier, '+5.00');
+  assert.equal(C.fartherPaysLess('hl', 'lower'), true); assert.equal(C.fartherPaysLess('tn', 'touch'), false); assert.equal(C.fartherPaysLess('ei', 'out'), false);
+});
+test('Runner auto barrier: same payout % on every market and on the recovery stake; skips unreachable markets', async () => {
+  // fake broker: payout ratio depends on offset/σ of the market AND rises a bit with stake (like Deriv)
+  const sd = { A: 40, B: 0.12, C: 5 }, quotes = [], buys = []; let n = 0; const results = [true, false, true, true, true, true, true];
+  const ratio = (sym, off, amt) => { if (sym === 'C') return 0.05; return Math.min(0.95, 0.9 * Math.exp(-off / (sd[sym] * 2.2)) * (amt >= 1 ? 1.12 : 1)); };
+  const io = { sleep: async () => { }, log: () => { },
+    scan: async () => [mk('C', M(80, 20, .1, 1, 5, 1), { higher: true, lower: true }), mk('A', M(60, 40, .1, 1, 40, 1), { higher: true, lower: true }), mk('B', M(55, 52, .1, 1, 0.12, 1), { higher: true, lower: true })].map(x => (x.pip = x.sym === 'B' ? 3 : 2, x)),
+    send: async q => {
+      if (q.proposal) { quotes.push(q); const r = ratio(q.underlying_symbol, Math.abs(+q.barrier), q.amount); return { proposal: { id: 'p' + quotes.length, ask_price: q.amount, payout: +(q.amount * (1 + r)).toFixed(4) } }; }
+      if (q.buy) { const lq = quotes[quotes.length - 1]; buys.push({ price: q.price, sym: lq.underlying_symbol, barrier: lq.barrier }); return { buy: { contract_id: 'c' + buys.length } }; }
+      if (q.proposal_open_contract) { const win = results[n++], b = buys[buys.length - 1]; const r = ratio(b.sym, Math.abs(+b.barrier), b.price);
+        return { proposal_open_contract: { is_sold: 1, status: win ? 'won' : 'lost', profit: win ? +(b.price * r).toFixed(2) : -b.price } }; } } };
+  const r = new C.Runner('hl', io, { side: 'both', withSignal: true, stake: 0.35, tp: 0.5, sl: 5, mart: 0, steps: 3, smart: false, dur: 5, unit: 't', autoBarrier: true, targets: { higher: 25, lower: 25 } });
+  await r.run();
+  assert.ok(r.skip['C|higher'] > Date.now(), 'market C (max 5 %) skipped');
+  for (const h of r.hist) { assert.notEqual(h.sym, 'C'); assert.ok(Math.abs(h.ratio - 0.25) <= 0.015, h.sym + ' ' + h.ratio); }
+  const rec = r.hist.slice().reverse().find((h, i, a) => i > 0 && a[i - 1].pl < 0);
+  assert.ok(rec && rec.stake > 1, 'recovery stake ' + (rec && rec.stake)); assert.ok(rec.pl >= 0.35 + 0.35 * 0.25 - 0.02, 'recovery covers loss + profit: ' + rec.pl);
+  assert.ok(new Set(r.hist.map(h => h.sym)).size >= 1);
+});
+test('Runner manual barrier uses the typed points', async () => {
+  const quotes = []; const io = { sleep: async () => { }, log: () => { }, scan: async () => [mk('1HZ25V', M(60, 40, .1, 1, 40, 1), { higher: true, lower: true })],
+    send: async q => q.proposal ? (quotes.push(q), { proposal: { id: 'x', ask_price: q.amount, payout: q.amount * 1.3 } }) : q.buy ? { buy: { contract_id: 'c' } } : { proposal_open_contract: { is_sold: 1, status: 'won', profit: 0.1 } } };
+  const r = new C.Runner('hl', io, { side: 'lower', withSignal: false, market: '1HZ25V', stake: 0.35, tp: 0.1, sl: 5, mart: 0, steps: 2, dur: 5, unit: 't', autoBarrier: false, barrier: 62.5 });
+  await r.run(); assert.equal(quotes.length, 1); assert.equal(quotes[0].barrier, '+62.50');
+});

@@ -83,20 +83,69 @@
     return { side: s, sym: x.sym, name: x.name, pct: s === inSide ? inScore : outScore, scan: x, dir: x.m.dir };
   }
 
-  /** Relative barrier(s). Auto = k·σ·√T (T in ticks), which keeps the payout roughly the
-   *  same on every market. manual = a number of points typed by the user. */
+  /** Default target payout % (profit ÷ stake) per side for Auto barrier. */
+  const TARGET = { hl: { higher: 25, lower: 25 }, tn: { touch: 100, notouch: 40 }, ei: { in: 80, out: 90 }, sg: { in: 40, out: 70 } };
+  /** true when a farther barrier pays less (Higher/Lower, No Touch, Ends In, Stays In). */
+  const fartherPaysLess = (bot, side) => bot === 'hl' || side === 'notouch' || side === 'in';
+  /** Signed barrier strings for an offset in points. Higher → −, Lower → +, Touch with the move,
+   *  No Touch against it, range bots ±. */
+  function barrierStr(bot, side, off, pip, dir) {
+    const B = BOTS[bot]; if (!B.barrier) return {};
+    const dp = pip == null ? 2 : pip, min = Math.pow(10, -dp); off = Math.max(+off || 0, min * 2);
+    off = +off.toFixed(dp); const f = x => x.toFixed(dp);
+    if (B.barrier === 2) return { barrier: '+' + f(off), barrier2: '-' + f(off), off };
+    if (bot === 'hl') return { barrier: (side === 'higher' ? '-' : '+') + f(off), off };
+    const d = dir || 1, sign = side === 'touch' ? d : -d;
+    return { barrier: (sign >= 0 ? '+' : '-') + f(off), off };
+  }
+  /** Starting guess: k·σ·√T (T in ticks). manual = points typed by the user. */
   function barrierFor(bot, side, m, dur, unit, manual, pip, dir) {
     const B = BOTS[bot]; if (!B.barrier) return {};
     const T = unit === 't' ? dur : (dur * { s: 1, m: 60, h: 3600 }[unit]) / Math.max(0.5, (m && m.dt) || 1);
-    let off = manual > 0 ? manual : (B.k[side] || 0.7) * ((m && m.sd) || 0) * Math.sqrt(T);
-    const dp = pip == null ? 2 : pip, min = Math.pow(10, -dp);
-    off = Math.max(off, min * 2);
-    const f = x => x.toFixed(dp);
-    if (B.barrier === 2) return { barrier: '+' + f(off), barrier2: '-' + f(off), off };
-    if (bot === 'hl') return { barrier: (side === 'higher' ? '-' : '+') + f(off), off };
-    // Touch: in the direction of the move. No Touch: against it.
-    const d = dir || 1, sign = side === 'touch' ? d : -d;
-    return { barrier: (sign >= 0 ? '+' : '-') + f(off), off };
+    const off = manual > 0 ? manual : (B.k[side] || 0.7) * ((m && m.sd) || 0) * Math.sqrt(T);
+    return barrierStr(bot, side, off, pip, dir);
+  }
+  /** Find the barrier offset whose live quote pays `target` % (profit ÷ stake).
+   *  quoteAt(off) → { ratio, prop } | { near: true } (barrier too close) ; throws on other errors.
+   *  "offers no return" is reported by quoteAt as ratio 0. Payout is monotonic in the offset, so this
+   *  brackets the target and bisects (geometric) / interpolates, honouring the barrier decimals.
+   *  Returns { off, ratio, prop, tries, hit } with the closest quote, or null when the target is out of reach. */
+  async function searchBarrier(quoteAt, o) {
+    const dec = o.dec, T = o.target / 100, tol = (o.tol == null ? 1.5 : o.tol) / 100, step = Math.pow(10, -(o.pip == null ? 2 : o.pip));
+    const maxTries = o.maxTries || 8, reach = (o.reach == null ? 5 : o.reach) / 100;
+    let lo = 0, hi = Infinity, best = null, x = Math.max(step * 2, +o.start || step * 10), tries = 0; const seen = new Map();
+    const rnd = v => Math.max(step * 2, Math.round(v / step) * step);
+    while (tries < maxTries) {
+      x = rnd(x); if (seen.has(x.toFixed(8))) break; tries++;
+      const q = await quoteAt(x); seen.set(x.toFixed(8), q);
+      let needFarther;
+      if (q.near) needFarther = true;
+      else {
+        if (q.ratio > 0 && (!best || Math.abs(q.ratio - T) < Math.abs(best.ratio - T))) best = { off: x, ratio: q.ratio, prop: q.prop };
+        if (q.ratio > 0 && Math.abs(q.ratio - T) <= tol) return Object.assign(best, { tries, hit: true });
+        needFarther = dec ? q.ratio > T : q.ratio < T;
+        q.x = x;
+      }
+      if (needFarther) lo = Math.max(lo, x); else hi = Math.min(hi, x);
+      if (hi - lo <= step * 1.01) break;
+      // next point: interpolate in log-space between bracketing quotes when we have both, else expand ×1.7
+      const pts = [...seen.values()].filter(z => z.x != null && z.ratio > 0);
+      const a = pts.filter(z => z.x <= lo + 1e-12).sort((u, v) => v.x - u.x)[0], b = pts.filter(z => z.x >= hi - 1e-12).sort((u, v) => u.x - v.x)[0];
+      let nx; const lt = Math.log(T);
+      if (hi === Infinity || lo === 0) { // one-sided so far: secant on log(payout) over the last two live quotes, else ×/÷ 2.5
+        const up = hi === Infinity, rec = pts.slice(-2);
+        if (rec.length === 2 && rec[0].x !== rec[1].x && rec[0].ratio !== rec[1].ratio) {
+          const [u, v] = rec, sl = (Math.log(v.ratio) - Math.log(u.ratio)) / (v.x - u.x); nx = v.x + (lt - Math.log(v.ratio)) / sl;
+        }
+        if (!(nx > 0) || (up && nx <= x) || (!up && nx >= x)) nx = up ? x * 2.5 : x / 2.5;
+        nx = up ? Math.min(nx, x * 8) : Math.max(nx, x / 8);
+      }
+      else if (a && b && a.ratio !== b.ratio) { const la = Math.log(a.ratio), lb = Math.log(b.ratio); nx = a.x + (b.x - a.x) * (lt - la) / (lb - la); if (!(nx > lo && nx < hi)) nx = Math.sqrt(lo * hi); }
+      else nx = Math.sqrt(lo * hi);
+      x = nx;
+    }
+    if (best && Math.abs(best.ratio - T) <= reach) return Object.assign(best, { tries, hit: Math.abs(best.ratio - T) <= tol });
+    return null;
   }
 
   function proposalReq(bot, side, sym, stake, dur, unit, bar) {
@@ -141,25 +190,57 @@
       if (x.ok && x.ok[side] === false) return null;
       return { side, sym: x.sym, name: x.name, scan: x, dir: x.m.dir };
     }
-    async quote(p, stake) {
-      const s = this.s, x = p.scan;
-      const bar = barrierFor(this.bot, p.side, x.m, s.dur, s.unit, s.barrier, x.pip, p.dir);
-      const r = await this.io.send(proposalReq(this.bot, p.side, p.sym, stake, s.dur, s.unit, bar));
-      return { prop: r.proposal, bar, ratio: ratioOf(r.proposal) };
+    /** Quote one trade. Auto barrier: search (or reuse the ≤60 s cached offset) so the payout at THIS stake
+     *  matches the target. Manual: the typed offset. Returns null when Auto can't reach the target here. */
+    async quote(p, stake, fixedOff) {
+      const s = this.s, x = p.scan, bot = this.bot, B = BOTS[bot];
+      const ask = async bar => this.io.send(proposalReq(bot, p.side, p.sym, stake, s.dur, s.unit, bar));
+      if (!B.barrier || !s.autoBarrier || fixedOff != null) {
+        const bar = fixedOff != null ? barrierStr(bot, p.side, fixedOff, x.pip, p.dir) : barrierFor(bot, p.side, x.m, s.dur, s.unit, s.barrier, x.pip, p.dir);
+        const r = await ask(bar); return { prop: r.proposal, bar, ratio: ratioOf(r.proposal) };
+      }
+      const target = (s.targets && s.targets[p.side]) || TARGET[bot][p.side];
+      const key = [p.sym, p.side, s.dur, s.unit].join('|'); this.cache = this.cache || {}; const c = this.cache[key];
+      const start = c && Date.now() - c.t < 60000 ? c.off : barrierFor(bot, p.side, x.m, s.dur, s.unit, 0, x.pip, p.dir).off;
+      let n = 0; const quoteAt = async off => {
+        if (n++) await this.io.sleep(200); // gentle on Deriv's proposal rate limit
+        try { const r = await ask(barrierStr(bot, p.side, off, x.pip, p.dir)); return { ratio: ratioOf(r.proposal), prop: r.proposal }; }
+        catch (e) { const m = String(e.message || e); if (/at least|too close|minimum/i.test(m)) return { near: true }; if (/no return/i.test(m)) return { ratio: 0 }; throw e; }
+      };
+      const f = await searchBarrier(quoteAt, { dec: fartherPaysLess(bot, p.side), target, start, pip: x.pip, tol: s.tol, maxTries: c ? 6 : 8 });
+      if (!f) { delete this.cache[key]; return null; }
+      this.cache[key] = { off: f.off, t: Date.now() };
+      return { prop: f.prop, bar: barrierStr(bot, p.side, f.off, x.pip, p.dir), ratio: f.ratio, target, tries: f.tries };
     }
     async tradeOnce() {
-      const scans = await this.io.scan(); const p = this.plan(scans);
-      if (!p || !p.scan || !p.scan.m) { this.io.log({ type: 'wait', text: 'Waiting for signal' }); return null; }
-      let stake = nextStake(this.st, this.s), q = await this.quote(p, stake);
+      let scans = await this.io.scan(), p = null, q = null, stake = 0; this.skip = this.skip || {};
+      const now = Date.now(), skipKey = (sym, side) => sym + '|' + side;
+      for (let tryN = 0; tryN < 4; tryN++) {
+        const usable = scans.map(z => { const ok = Object.assign({}, z.ok); BOTS[this.bot].sides.forEach(([k]) => { if ((this.skip[skipKey(z.sym, k)] || 0) > now) ok[k] = false; }); return Object.assign({}, z, { ok }); });
+        p = this.plan(usable);
+        if (!p || !p.scan || !p.scan.m) { this.io.log({ type: 'wait', text: 'Waiting for signal' }); return null; }
+        const auto = !(this.s.mart > 0) && this.st.consec > 0;
+        const tgt = this.s.autoBarrier && BOTS[this.bot].barrier ? ((this.s.targets && this.s.targets[p.side]) || TARGET[this.bot][p.side]) / 100 : 0;
+        stake = nextStake(this.st, this.s, auto && tgt ? tgt : undefined); // recovery: size for the target payout first
+        q = await this.quote(p, stake);
+        if (q) break;
+        this.skip[skipKey(p.sym, p.side)] = now + 60000;
+        this.io.log({ type: 'skip', sym: p.sym, side: p.side, text: 'Target payout not reachable on ' + p.name });
+        if (!this.s.withSignal) return null;
+      }
+      if (!q) return null;
       if (this.st.consec === 0) this.st.baseRatio = q.ratio;
-      else if (!(this.s.mart > 0)) { // auto martingale: size from the quote, re-quote once at the new stake
-        const st2 = nextStake(this.st, this.s, q.ratio); if (Math.abs(st2 - stake) >= 0.01) { stake = st2; q = await this.quote(p, stake); }
-        const st3 = nextStake(this.st, this.s, q.ratio); if (st3 > stake + 0.005) { stake = st3; q = await this.quote(p, stake); }
+      else if (!(this.s.mart > 0)) { // auto martingale: re-size from the real quote, keep the found barrier
+        const need = this.st.lossRun + this.s.stake * this.st.baseRatio, keep = q.bar.off != null ? q.bar.off : null, tgt = q.target;
+        for (let i = 0; i < 3; i++) {
+          let st2 = nextStake(this.st, this.s, q.ratio); if (st2 === stake && stake * q.ratio + 1e-9 < need && !this.s.smart) st2 = r2(stake + 0.01);
+          if (st2 === stake) break; stake = st2; q = Object.assign(await this.quote(p, stake, keep), { target: tgt });
+        }
       }
       const ask = +q.prop.ask_price;
-      this.io.log({ type: 'open', side: p.side, sym: p.sym, name: p.name, stake, ratio: q.ratio, barrier: q.bar.barrier, barrier2: q.bar.barrier2, ct: BOTS[this.bot].ct[p.side] });
+      this.io.log({ type: 'open', side: p.side, sym: p.sym, name: p.name, stake, ratio: q.ratio, target: q.target, tries: q.tries, off: q.bar.off, barrier: q.bar.barrier, barrier2: q.bar.barrier2, ct: BOTS[this.bot].ct[p.side] });
       const b = await this.io.send({ buy: q.prop.id, price: ask });
-      const id = b.buy.contract_id, row = { id, side: p.side, sym: p.sym, stake: ask, ratio: q.ratio, barrier: q.bar.barrier, barrier2: q.bar.barrier2, ct: BOTS[this.bot].ct[p.side], t: Date.now(), status: 'Open' };
+      const id = b.buy.contract_id, row = { id, side: p.side, sym: p.sym, stake: ask, ratio: q.ratio, target: q.target, off: q.bar.off, barrier: q.bar.barrier, barrier2: q.bar.barrier2, ct: BOTS[this.bot].ct[p.side], t: Date.now(), status: 'Open' };
       this.open = row; this.io.log({ type: 'bought', row });
       const c = await this.waitSettle(id);
       let pl = Number(c.profit); if (isNaN(pl)) pl = Number(c.sell_price || 0) - ask;
@@ -221,7 +302,7 @@
       .filter(x => B.sides.some(([k]) => x.ok[k]));
   }
 
-  const CORE = { BOTS, analyzeTicks, supports, parseDur, topSignals, pickSignal, barrierFor, proposalReq, ratioOf, newState, nextStake, applyResult, checkStop, mart0, Runner, Scanner, withSupport };
+  const CORE = { BOTS, TARGET, fartherPaysLess, barrierStr, searchBarrier, analyzeTicks, supports, parseDur, topSignals, pickSignal, barrierFor, proposalReq, ratioOf, newState, nextStake, applyResult, checkStop, mart0, Runner, Scanner, withSupport };
   if (typeof module !== 'undefined' && module.exports) module.exports = CORE;
   root.ADBCore = CORE;
   if (typeof document === 'undefined') return;
@@ -295,7 +376,8 @@
         <div class="rf-field"><label>Martingale</label><input type="text" id="${id}Mart" value="Auto" inputmode="decimal"><div class="adb-hint">Auto from payout</div></div></div>
       <div class="rf-row"><div class="rf-field"><label>Martingale Steps</label><input type="number" id="${id}Steps" value="2" min="0" max="10"></div>
         <div class="rf-field"><label>Duration</label><div class="rf-dur"><input type="number" id="${id}Dur" value="${B.dur[0]}" min="1"><select id="${id}DurUnit">${units}</select></div></div>
-        ${B.barrier ? `<div class="rf-field"><label>Barrier</label><input type="text" id="${id}Barrier" value="Auto" inputmode="decimal"><div class="adb-hint" id="${id}BarHint">Auto per market</div></div>` : ''}</div>
+        ${B.barrier ? `<div class="rf-field"><label class="adb-lab">Barrier<span class="adb-auto"><input type="checkbox" id="${id}BarAuto" checked aria-label="Auto barrier"><span>Auto</span></span></label><input type="text" id="${id}Barrier" value="" placeholder="Auto" inputmode="decimal" disabled><div class="adb-hint" id="${id}BarHint">Set before each trade</div></div>
+        <div class="rf-field" id="${id}TgtField"><label>Target payout %</label><div class="rf-dur adb-tgt"><input type="number" id="${id}TgtA" value="${(TARGET[id] || {})[a[0]] || ''}" min="1" step="1" aria-label="${a[1]} target %"><input type="number" id="${id}TgtB" value="${(TARGET[id] || {})[b[0]] || ''}" min="1" step="1" aria-label="${b[1]} target %"></div><div class="adb-hint">${a[1]} · ${b[1]}</div></div>` : ''}</div>
       <div class="rf-switch-row"><span>Smart Martingale</span><label class="rf-switch"><input type="checkbox" id="${id}Smart"><span class="rf-slider"></span></label></div>
       <div class="rf-btns"><button type="button" class="rf-btn start" id="${id}Start">Start</button><button type="button" class="rf-btn stop" id="${id}Stop" disabled>Stop</button><button type="button" class="rf-btn reset" id="${id}Reset">Reset</button></div>
       <div class="rf-session-bar"><div class="rf-session-pill" id="${id}PillPL"><div class="sp-label">Session P/L</div><div class="sp-val" id="${id}SessPL">$0.00</div></div>
@@ -313,11 +395,13 @@
     if (unit === 't') dur = Math.min(10, Math.max(5, dur));
     if (unit === 's') dur = Math.max(id === 'ru' ? 20 : 15, dur);
     if (unit === 'm' && (B.barrier === 2 || id === 'tn')) dur = Math.max(2, dur);
-    const bar = v('Barrier') ? String(v('Barrier').value).trim() : '';
+    const bar = v('Barrier') ? String(v('Barrier').value).replace(/[±+\-\s]/g, '').trim() : '';
+    const autoBarrier = !!(v('BarAuto') && v('BarAuto').checked), targets = {};
+    if (v('TgtA')) { targets[B.sides[0][0]] = Math.max(1, +v('TgtA').value || TARGET[id][B.sides[0][0]]); targets[B.sides[1][0]] = Math.max(1, +v('TgtB').value || TARGET[id][B.sides[1][0]]); }
     return { side: seg('SideSeg') || 'both', withSignal: seg('SigSeg') !== 'without', market: v('Market').value,
       stake: Math.max(0.35, +v('Stake').value || 0.35), tp: Math.max(0.1, +v('TP').value || 1), sl: Math.max(0.1, +v('SL').value || 2),
       mart: mart0(v('Mart').value), steps: (() => { const s = +v('Steps').value; return s === 0 ? 0 : Math.max(1, s || 2); })(),
-      smart: !!v('Smart').checked, dur, unit, barrier: /^auto$/i.test(bar) || bar === '' ? 0 : Math.abs(+bar) || 0, ticks: Math.max(20, Math.min(1000, +v('Ticks').value || 100)) };
+      smart: !!v('Smart').checked, dur, unit, autoBarrier, targets, barrier: autoBarrier || /^auto$/i.test(bar) || bar === '' ? 0 : Math.abs(+bar) || 0, ticks: Math.max(20, Math.min(1000, +v('Ticks').value || 100)) };
   }
   const money = x => (x >= 0 ? '+' : '-') + '$' + Math.abs(x).toFixed(2);
   function sideLabel(id, k) { const s = BOTS[id].sides.find(z => z[0] === k); return s ? s[1] : k; }
@@ -329,7 +413,7 @@
     $(id + 'Hist').innerHTML = rows.length ? rows.map(t => { const open = t.status === 'Open', pl = t.pl;
       const cls = /higher|up|call|touch$|^in$/.test(t.side) && t.side !== 'notouch' ? 'rise' : 'fall';
       return `<div class="rf-tx-item"><div><div class="rf-tx-main"><span class="rf-tx-type ${cls}">${sideLabel(id, t.side).toUpperCase()}</span><span class="rf-tx-ref">${String(t.id).slice(-8)}</span></div>
-        <div class="rf-tx-meta">${t.sym}${t.barrier ? ' · ' + t.barrier + (t.barrier2 ? '/' + t.barrier2 : '') : ''} · $${Number(t.stake).toFixed(2)}</div></div>
+        <div class="rf-tx-meta">${t.sym}${t.barrier ? ' · ' + (t.barrier2 ? '±' + t.barrier.slice(1) : t.barrier) : ''} · $${Number(t.stake).toFixed(2)}${t.ratio ? ' · ' + (t.ratio * 100).toFixed(1) + '%' : ''}</div></div>
         <div class="rf-tx-right"><div class="rf-tx-pl ${pl == null ? '' : pl >= 0 ? 'pos' : 'neg'}">${pl == null ? '—' : (pl >= 0 ? '+' : '') + pl.toFixed(2)}</div><div class="rf-tx-st ${open ? 'open' : pl >= 0 ? 'won' : 'lost'}">${t.status}</div></div></div>`; }).join('')
       : '<div class="rf-tx-empty">No trades yet</div>';
   }
@@ -345,8 +429,9 @@
       $(id + 'SigAPct').textContent = (dir ? t.a.m.risePct : t.a.m.er * 100).toFixed(1) + '%';
       $(id + 'SigBPct').textContent = (dir ? t.b.m.fallPct : t.b.m.er * 100).toFixed(1) + '%'; }
     const hint = $(id + 'BarHint');
-    if (hint) { const x = list.find(z => z.sym === s.market) || (t && t.a); if (x && x.m) { const side = s.side === 'both' ? BOTS[id].sides[0][0] : s.side;
-      const b = barrierFor(id, side, x.m, s.dur, s.unit, s.barrier, x.pip, x.m.dir); hint.textContent = (s.barrier ? 'Fixed ' : 'Auto ') + '±' + b.off.toFixed(x.pip) + ' · ' + x.name.replace('Volatility', 'Vol'); } }
+    if (hint && !(UI[id].runner && UI[id].runner.running) && !UI[id].lastAuto) { const x = list.find(z => z.sym === s.market) || (t && t.a); if (x && x.m) { const side = s.side === 'both' ? BOTS[id].sides[0][0] : s.side;
+      const b = barrierFor(id, side, x.m, s.dur, s.unit, s.barrier, x.pip, x.m.dir);
+      hint.textContent = s.autoBarrier ? 'Tuned to ' + s.targets[side] + '% each trade' : 'Fixed ±' + b.off.toFixed(x.pip) + ' · ' + x.name.replace('Volatility', 'Vol'); } }
     return list;
   }
   let scanTimer = null;
@@ -366,7 +451,12 @@
     const el = document.querySelector('.wallet-bal'); if (acc && el) el.textContent = Number(acc.balance).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ' + (acc.currency || 'USD'); } catch (_) { } }
 
   function setRunning(id, on) { $(id + 'Start').disabled = on; $(id + 'Stop').disabled = !on;
-    $(id + 'Panel').querySelectorAll('input,select,.adb-seg button').forEach(e => { e.disabled = on; }); }
+    $(id + 'Panel').querySelectorAll('input,select,.adb-seg button').forEach(e => { e.disabled = on; }); syncAuto(id); }
+  /** Auto on: barrier box greyed and shows the last tuned value; off: user types the offset (points). */
+  function syncAuto(id) { const t = $(id + 'BarAuto'), inp = $(id + 'Barrier'); if (!t || !inp) return; const on = t.checked, run = !!(UI[id].runner && UI[id].runner.running);
+    inp.disabled = on || run; inp.placeholder = on ? 'Auto' : 'Points';
+    const tf = $(id + 'TgtField'); if (tf) { tf.classList.toggle('adb-off', !on); tf.querySelectorAll('input').forEach(e => { e.disabled = !on || run; }); }
+    const la = UI[id].lastAuto; if (on) inp.value = la ? '±' + la.off : ''; else if (!inp.value || /±/.test(inp.value)) inp.value = la ? String(la.off) : ''; }
   async function start(id) {
     if (!getToken()) return note(id, 'Connect your account first');
     const u = UI[id]; if (u.runner && u.runner.running) return;
@@ -379,7 +469,10 @@
   }
   function onEvent(id, ev) {
     if (ev.type === 'wait') { live(id, 'Idle', 'Waiting for signal'); return; }
-    if (ev.type === 'open') { live(id, 'Attempting', 'Placing ' + sideLabel(id, ev.side).toUpperCase(), 'attempt'); return; }
+    if (ev.type === 'open') { live(id, 'Attempting', 'Placing ' + sideLabel(id, ev.side).toUpperCase(), 'attempt');
+      if (ev.off != null && $(id + 'BarAuto') && $(id + 'BarAuto').checked) { UI[id].lastAuto = { off: ev.off }; $(id + 'Barrier').value = '±' + ev.off; const h = $(id + 'BarHint'); if (h) h.textContent = (ev.ratio * 100).toFixed(1) + '% · ' + String(ev.name || ev.sym).replace('Volatility', 'Vol'); }
+      return; }
+    if (ev.type === 'skip') { note(id, ev.text + ' · trying the next market'); return; }
     if (ev.type === 'bought') { const t = ev.row; live(id, sideLabel(id, t.side).toUpperCase() + ' open', 'Stake $' + t.stake.toFixed(2), 'open');
       note(id, 'Open ' + sideLabel(id, t.side) + ' · ' + t.sym + ' · $' + t.stake.toFixed(2)); render(id); return; }
     if (ev.type === 'settled') { const t = ev.row, st = ev.st; render(id); refreshBalance();
@@ -418,6 +511,7 @@
       ['Ticks', 'Dur', 'DurUnit', 'Barrier', 'Market'].forEach(k => $(id + k) && $(id + k).addEventListener('change', () => scanFor(id).catch(() => { })));
       card.addEventListener('click', e => { e.stopPropagation(); const p = $(id + 'Panel'); closeAll(id + 'Panel'); const open = p.classList.toggle('open'); badge.textContent = open ? 'Close' : 'Open';
         if (open) { scanFor(id).catch(() => { }); setTimeout(() => p.scrollIntoView({ behavior: 'smooth', block: 'start' }), 50); } });
+      if ($(id + 'BarAuto')) { $(id + 'BarAuto').addEventListener('change', () => { syncAuto(id); scanFor(id).catch(() => { }); }); syncAuto(id); }
       $(id + 'Start').onclick = () => start(id); $(id + 'Stop').onclick = () => stop(id); $(id + 'Reset').onclick = () => reset(id);
     });
     // the four original cards: opening one closes ours

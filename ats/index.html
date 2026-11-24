@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ATS">
 <meta name="application-name" content="Deriv Analyzer">
-<meta name="app-version" content="5.0.0">
+<meta name="app-version" content="5.1.0">
 <title>Deriv Analyzer</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -1134,6 +1134,15 @@ body.ats-open .wallet-wrap{display:none !important}
 .adb-panel .rf-row{grid-template-columns:1fr 1fr}
 .rf-seg.adb-sig button.active[data-v="with"]{background:var(--green-bg);color:var(--green)}
 .rf-field input:disabled,.rf-field select:disabled{opacity:.6}
+.adb-lab{display:flex !important;align-items:center;justify-content:space-between;gap:6px}
+.adb-auto{display:inline-flex;align-items:center;gap:4px;text-transform:none;letter-spacing:0;font-size:10px;font-weight:700;color:var(--muted);cursor:pointer}
+.adb-auto input{appearance:none;-webkit-appearance:none;width:24px;height:14px;border-radius:8px;background:var(--line2);position:relative;margin:0;cursor:pointer;transition:background .2s;padding:0;border:0}
+.adb-auto input::after{content:"";position:absolute;top:2px;left:2px;width:10px;height:10px;border-radius:50%;background:#fff;transition:transform .2s}
+.adb-auto input:checked{background:var(--green)}.adb-auto input:checked::after{transform:translateX(10px)}
+.adb-auto input:checked+span{color:var(--green)}
+.adb-tgt{display:grid !important;grid-template-columns:1fr 1fr;gap:6px}
+.adb-tgt input{width:100% !important;min-width:0}
+.adb-off{opacity:.45}
 </style>
 </head>
 <body class="theme-dark">
@@ -7839,7 +7848,7 @@ function updateTechnicalsFromData() {
   </div>
 </div>
 
-<script src="analyzer-bots.js?v=2"></script>
+<script src="analyzer-bots.js?v=3"></script>
 <script src="shell.js?v=1"></script>
 </body>
 </html>

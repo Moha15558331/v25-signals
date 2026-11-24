@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.19.0';
+const APP_VER = '4.20.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -263,7 +263,7 @@ function renderHome() {
 async function startStop(id) { const st = R.st; if (!st) return; const x = botOf(st, id); if (!x) return;
   if (x.on) { try { await R.stop(id); toast({ level: 'info', title: x.name + ' stopping', text: x.open ? 'Waiting for the open trade to settle' : '' }); } catch (e) { errToast(e); } return; }
   if (id === 'ats' && isReal(st)) { if (!(await ask({ title: 'Start on real money?', text: 'Rise and Fall will trade your real balance.', real: true, ok: 'Start' }))) return; }
-  if (id === 'atsbot' && isReal(st)) { const p = x.params; if (!(await ask({ title: 'Start ATS Bot on real money?', text: `It trades your real balance: ${money(p.stake)} stake, ×${p.mg_factor} after a loss, stops for the day at +${money(p.target)} or after ${p.max_consec_losses} losses in a row.`, real: true, ok: 'Start on Real' }))) return; }
+  if (id === 'atsbot' && isReal(st)) { const p = x.params; if (!(await ask({ title: 'Start ATS Bot on real money?', text: `It trades your real balance: ${money(p.stake)} stake, ×${p.mg_factor} after a loss, stops for the day at +${money(p.target)} or when the daily loss cap is reached.`, real: true, ok: 'Start on Real' }))) return; }
   try { await R.start(id); } catch (e) { errToast(e); } }
 /** Everything running: Deriv bots that are on plus the MT5 EA when it is allowed to trade. */
 function runningNames(st) { const M = window.ATSMT5 && window.ATSMT5.data(); return (st ? allBots(st).filter(x => x.on).map(x => x.name) : []).concat(M && M.control === 'run' ? ['MT5'] : []); }
@@ -364,11 +364,11 @@ const abLock = x => (x.ab && x.ab.lock) || null;
 function abChip(x) { const o = x.outcome; return x.on ? (x.running ? ['live', 'Running'] : ['warn', 'Stopping']) : o === 'target' ? ['ok', 'Target hit'] : o === 'stopped' ? ['bad', 'Stopped'] : o === 'halted' ? ['bad', 'Halted'] : ['', 'Ready']; }
 function abStatus(x) { const td = x.ab.today || {}, lk = abLock(x);
   if (x.on && !x.running) return 'Finishing the last trade…';
-  if (x.running) return x.pos ? `Trade open · ${money(x.pos.stake)}` : /^Analysing/.test(x.msg || '') ? 'Analysing…' : td.trades ? `Trading · ${td.trades} trade${td.trades === 1 ? '' : 's'} today` : 'Reading the market…';
+  if (x.running) return x.pos ? `Trade open · ${money(x.pos.stake)}` : /^(Analysing|Waiting|Cooling)/.test(x.msg || '') ? x.msg : td.trades ? `Trading · ${td.trades} trade${td.trades === 1 ? '' : 's'} today` : 'Reading the market…';
   if (lk) return lk.text;
   if (x.outcome === 'halted') return x.msg || 'Stopped';
   return 'Ready'; }
-const abAnalysing = x => !!(x.running && !x.pos && /^Analysing/.test(x.msg || ''));
+const abAnalysing = x => !!(x.running && !x.pos && /^(Analysing|Waiting|Cooling)/.test(x.msg || ''));
 function abBar(pnl, target) { const t = Math.max(0.01, +target || 1), w = Math.max(0, Math.min(1, (+pnl || 0) / t)) * 100;
   return `<div class="ab-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(w)}"><i style="width:${w.toFixed(1)}%"></i></div>`; }
 const abWr = td => td.trades ? Math.round(td.wins / td.trades * 100) + '%' : '—';
@@ -384,19 +384,25 @@ const AB_SCHEMA = [{ title: 'Parameters', fields: [
   nm('stake', 'Stake', '$', 'First trade of every chain'),
   nm('payout_pct', 'Payout', '%', 'Profit per win; the recovery stake is sized from live prices'),
   nm('target', 'Daily target', '$', 'Locks for the day when today is up this much'),
-  it('max_consec_losses', 'Stop after', 'losses', 'Losses in a row that end the day'),
+  it('max_consec_losses', 'Stop after', 'losses', 'Losses in a row that count as one stop'),
+  it('max_stops', 'Stops per day', '', 'Stop events that lock the day'),
+  it('cooloff_min', 'Cool-off after a stop', 'min', 'Wait before trading again'),
   it('pause_win', 'Pause after win', 's', 'Wait, then a fresh read'),
-  it('pause_loss', 'Pause after loss', 's', 'Wait before the next trade')] }];
+  it('pause_loss', 'Pause after loss', 's', 'Wait before the recovery trade'),
+  sw('patient', 'Patient mode', 'Space trades through the day'),
+  it('gap_min', 'Gap between trades', 'min', 'Minimum wait after a win', d => d.patient !== false),
+  it('per_hour', 'Max trades per hour', '', 'Then it waits', d => d.patient !== false)] }];
 let abForm = null, abOpen = false, lastAbHero = '', lastAbRec = '';
-const abVals = p => ({ stake: p.stake, payout_pct: p.payout_pct != null ? p.payout_pct : 25, target: p.target, max_consec_losses: p.max_consec_losses, pause_win: p.pause_win != null ? p.pause_win : 5, pause_loss: p.pause_loss != null ? p.pause_loss : 30 });
+const abVals = p => ({ stake: p.stake, payout_pct: p.payout_pct != null ? p.payout_pct : 25, target: p.target, max_consec_losses: p.max_consec_losses, pause_win: p.pause_win != null ? p.pause_win : 5, pause_loss: p.pause_loss != null ? p.pause_loss : 30, patient: p.patient !== false, gap_min: p.gap_min != null ? p.gap_min : 3, per_hour: p.per_hour != null ? p.per_hour : 6, cooloff_min: p.cooloff_min != null ? p.cooloff_min : 60, max_stops: p.max_stops != null ? p.max_stops : 1 });
 let abRec = null; // v4.17: recovery sized by the server from live quotes (stakes, factor, worst)
-function abWorst(d) { const s = +d.stake, pct = +d.payout_pct, n = Math.round(+d.max_consec_losses); if (!(s > 0 && pct > 0 && n >= 1 && n <= 20)) return '';
+function abWorst(d) { const s = +d.stake, pct = +d.payout_pct, n = Math.round(+d.max_consec_losses), k = Math.max(1, Math.round(+d.max_stops || 1)); if (!(s > 0 && pct > 0 && n >= 1 && n <= 20)) return '';
   const r = abRec, same = r && r.stakes && r.stakes[0] === s && r.stakes.length === n;
   let ch = same ? r.stakes.slice() : null;
   if (!ch) { const prof = Math.ceil(s * (1 + pct / 100) * 100 - 1e-6) / 100 - s, ratio = r && r.ratio ? r.ratio : 0.27; ch = [s]; let loss = s;
     for (let i = 1; i < n; i++) { const st = Math.ceil((loss + prof) / ratio * 100) / 100; ch.push(st); loss += st; } }
-  const worst = ch.reduce((a, b) => a + b, 0), ap = same ? '' : '≈ ';
-  return n > 1 ? `Recovery ${ap}${money(ch[1])} (×${(ch[1] / s).toFixed(2)}) · worst case for one day −${ap}${money(worst)}` : `Worst case for one day −${money(worst)}`; }
+  const chain = ch.reduce((a, b) => a + b, 0), worst = Math.round(chain * k * 100) / 100, ap = same ? '' : '≈ ';
+  const rec = n > 1 ? `Recovery ${ap}${money(ch[1])} (×${(ch[1] / s).toFixed(2)}) · ` : '';
+  return `${rec}worst case for one day −${ap}${money(worst)}${k > 1 ? ' · ' + k + ' stops' : ''}`; }
 function abMountForm(x) { if (abForm) return; $('abSave').hidden = true;
   abForm = new FormCtl($('abForm'), AB_SCHEMA, abVals(x.params), { prefix: 'ab', onChange: f => { $('abSave').hidden = !f.dirty; $('abWorst').textContent = abWorst(f.draft); } });
   $('abWorst').textContent = abWorst(abVals(x.params)); }

@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0a0b0e" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#f4f5f7" media="(prefers-color-scheme: light)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ATS">
+<meta name="application-name" content="ATS">
+<meta name="app-version" content="4.19.0">
+<meta name="description" content="ATS: ATS Bot, Rise and Fall, Even/Odd, Over/Under and Matches/Differs bots plus the MT5 bot, running 24/7 on your server.">
+<title>Deriv ATS</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/ats-192.png">
+<link rel="apple-touch-icon" sizes="180x180" href="icons/ats-180.png">
+<link rel="stylesheet" href="style.css?v=75">
+<link rel="stylesheet" href="theme.css?v=1">
+<script>try{var t=localStorage.getItem('ats.theme2')||'auto';var d=t==='dark'||(t==='auto'&&matchMedia('(prefers-color-scheme: dark)').matches);document.documentElement.dataset.theme=d?'dark':'light';}catch(e){document.documentElement.dataset.theme='dark';}</script>
+</head><body>
+<div class="chrome" id="chrome">
+<header class="top">
+  <div class="top-inner">
+    <div class="brand"><span class="logo" aria-hidden="true"><img src="icons/ats-192.png" alt="" width="28" height="28"></span><b>ATS</b></div>
+    <nav class="tabbar" id="tabbar" aria-label="Sections">
+      <button type="button" data-go="home" class="on"><svg viewBox="0 0 24 24"><path d="M4 10.5L12 4l8 6.5V20H4z"/><path d="M10 20v-5h4v5"/></svg><span>Home</span></button>
+      <button type="button" data-go="mt5"><svg viewBox="0 0 24 24"><path d="M7 4v3M7 15v5M17 4v6M17 18v2"/><rect x="5" y="7" width="4" height="8" rx="1"/><rect x="15" y="10" width="4" height="8" rx="1"/></svg><span>MT5</span></button>
+      <button type="button" data-go="stats"><svg viewBox="0 0 24 24"><path d="M5 20V11M11 20V5M17 20v-6M3 20h18"/></svg><span>Stats</span></button>
+      <button type="button" data-go="history"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></svg><span>History</span></button>
+      <button type="button" data-go="settings"><svg viewBox="0 0 24 24"><path d="M4 7h9M17 7h3M4 12h3M11 12h9M4 17h11M19 17h1"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="12" r="2"/><circle cx="17" cy="17" r="2"/></svg><span>Settings</span></button>
+    </nav>
+    <button type="button" class="stop-top" id="stopTop" hidden aria-label="Stop all bots"><svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2"/></svg><span>Stop all</span></button>
+    <button type="button" class="acct-pill" id="acctPill" aria-label="Account"><span class="badge" id="modeBadge"><i class="live-dot" id="liveDot"></i><span id="modeTxt">OFFLINE</span></span><span class="acct-bal" id="acctBal">—</span><svg class="chev" viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button>
+  </div>
+</header>
+<div class="real-strip" id="realStrip" hidden><span class="real-mini">REAL</span><span id="realStripTxt">Real money</span></div>
+</div>
+
+<main id="main">
+  <section class="view" id="v-home">
+    <div class="pair-card card" id="pairCard" hidden>
+      <h2>Sign in</h2>
+      <p class="muted">Enter your password.</p>
+      <input type="password" id="pairInput" class="field" placeholder="Password" autocomplete="current-password" autocapitalize="off" autocorrect="off" spellcheck="false">
+      <button type="button" class="btn primary block" id="pairBtn">Connect</button>
+      <p class="err-txt" id="pairErr"></p>
+    </div>
+    <div id="homeMain" class="home">
+      <header class="welcome">
+        <div class="welcome-txt">
+          <h1>Welcome, <span id="atsName">Trader</span><button type="button" class="icon-btn" id="atsNameEdit" aria-label="Edit name"><svg viewBox="0 0 24 24"><path d="M4 20h4L19 9l-4-4L4 16z"/></svg></button></h1>
+          <p>to the future of auto trading</p>
+        </div>
+        <span class="mode-tag" id="heroMode">OFFLINE</span>
+      </header>
+      <div class="home-grid">
+        <div class="home-main">
+          <div class="summary" id="summary"></div>
+          <section class="sec" aria-label="Bots">
+            <div class="sec-h"><h2>Bots</h2><button type="button" class="btn danger sm" id="stopAll" hidden>Stop all</button></div>
+            <div class="bots" id="bots"></div>
+          </section>
+        </div>
+        <aside class="home-side">
+          <section class="card" id="recentCard">
+            <div class="card-h"><h3>Recent trades</h3><button type="button" class="link" data-go="history">See all</button></div>
+            <ul class="trades" id="recent"></ul>
+          </section>
+          <div class="status-line" id="statusLine"><i class="dot"></i><span id="statusTxt">Connecting…</span></div>
+        </aside>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="v-bot" hidden>
+    <div class="bot-head">
+      <button type="button" class="back" id="botBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><span>Bots</span></button>
+      <div class="bot-title"><span class="mono" id="botMono">RF</span><div><h1 id="botName">Rise and Fall</h1><small id="botSub">V25 (1s)</small></div></div>
+      <div class="bot-actions"><span class="chip" id="botChip">Stopped</span><button type="button" class="btn primary" id="botGo">Start</button></div>
+    </div>
+    <div class="bot-grid">
+      <div class="bot-col">
+        <div id="botLive"></div>
+        <div id="botAnalysis"></div>
+        <section class="card" id="botRecentCard"><div class="card-h"><h3>Recent trades</h3><button type="button" class="link" id="botHistLink">History</button></div><ul class="trades" id="botRecent"></ul></section>
+      </div>
+      <div class="bot-col">
+        <section class="card form-card">
+          <div class="card-h"><h3>Settings</h3><span class="muted" id="botFormNote"></span></div>
+          <div class="notice" id="botFormLock" hidden><span>Stop the bot to change its settings.</span></div>
+          <form id="botForm" autocomplete="off" onsubmit="return false"></form>
+          <div class="save-row" id="botSave" hidden><button type="button" class="btn ghost" id="botDiscard">Discard</button><button type="button" class="btn primary" id="botSaveBtn">Save</button></div>
+        </section>
+      </div>
+    </div>
+  </section>
+
+  <section class="view" id="v-ab" hidden>
+    <div class="bot-head ab-head"><button type="button" class="back" id="abBack"><svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7"/></svg><span>Bots</span></button></div>
+    <div class="ab-wrap">
+      <div id="abBody"></div>
+      <section class="card ab-params">
+        <button type="button" class="ab-ph" id="abParamsBtn" aria-expanded="false" aria-controls="abParamsBox"><span><b>Parameters</b><small>Stake, target, stop, pauses</small></span><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button>
+        <div id="abParamsBox" hidden>
+          <div class="notice" id="abLock" hidden><span>Stop the bot to change its parameters.</span></div>
+          <form id="abForm" autocomplete="off" onsubmit="return false"></form>
+          <p class="muted small ab-worst" id="abWorst"></p>
+          <div class="save-row" id="abSave" hidden><button type="button" class="btn ghost" id="abDiscard">Discard</button><button type="button" class="btn primary" id="abSaveBtn">Save</button></div>
+        </div>
+      </section>
+      <section class="card ab-params">
+        <button type="button" class="ab-ph" id="abActBtn" aria-expanded="false" aria-controls="abActBox"><span><b>Activity</b><small id="abActSub">Recent trades</small></span><svg viewBox="0 0 24 24"><path d="M7 10l5 5 5-5"/></svg></button>
+        <div id="abActBox" hidden><div class="ab-actf"><button type="button" class="ab-reset ab-clear" id="abClear" hidden><svg viewBox="0 0 24 24"><path d="M4 7h16M9 7V4.5h6V7M6.5 7l1 13h9l1-13"/></svg><span>Clear history</span></button></div><div class="ab-scroll" id="abScroll"><ul class="trades" id="abRecent"></ul></div></div>
+      </section>
+    </div>
+  </section>
+
+  <section class="view" id="v-mt5" hidden>
+    <h1 class="page-title">MT5 <span>V25 (1s) CFD</span></h1>
+    <div id="mt5Body"></div>
+  </section>
+
+  <section class="view" id="v-stats" hidden>
+    <h1 class="page-title">Stats</h1>
+    <div class="chips" id="statsChips"></div>
+    <div id="statsBody"><div class="card"><p class="muted">Loading…</p></div></div>
+  </section>
+
+  <section class="view" id="v-history" hidden>
+    <h1 class="page-title">History</h1>
+    <div class="chips" id="histChips"></div>
+    <div class="card"><ul class="trades" id="histList"></ul></div>
+    <button type="button" class="btn ghost block" id="exportBtn">Export CSV</button>
+  </section>
+
+  <section class="view" id="v-settings" hidden>
+    <h1 class="page-title">Settings</h1>
+    <div id="setBody"></div>
+  </section>
+</main>
+
+<button type="button" class="upd-bar" id="updBar" hidden>Update available</button>
+<div class="toasts" id="toasts" aria-live="polite"></div>
+<div class="sheet-wrap" id="sheetWrap" hidden><div class="sheet-bg" id="sheetBg"></div><div class="sheet" id="sheet" role="dialog"></div></div>
+
+<script src="shared/ats-engine.js?v=75"></script>
+<script src="remote.js?v=75"></script>
+<script src="app.js?v=75"></script>
+<script src="mt5.js?v=75"></script>
+<script src="push.js?v=75"></script>
+<script src="nav.js?v=1"></script>
+</body></html>

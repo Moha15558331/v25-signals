@@ -1,8 +1,9 @@
-/* ATS service worker v14: network-first for the app shell (HTML/JS/CSS),
+/* Deriv Analyzer + ATS service worker (v5: Analyzer is the home screen, ATS lives in ats.html).
+ * ATS service worker v14: network-first for the app shell (HTML/JS/CSS),
  * so the phone always picks up a new version. Never caches trading/market traffic
  * (WebSockets and api.derivws.com are cross-origin and pass straight through). */
-const CACHE = 'ats-shell-v33';
-const SHELL = ['./', './index.html', './style.css', './app.js', './remote.js', './mt5.js', './push.js', './shared/ats-engine.js',
+const CACHE = 'ats-shell-v34';
+const SHELL = ['./', './index.html', './ats.html', './shell.js', './analyzer-bots.js', './nav.js', './theme.css', './style.css', './app.js', './remote.js', './mt5.js', './push.js', './shared/ats-engine.js',
   './manifest.json', './icons/favicon-32.png', './icons/ats-180.png', './icons/ats-192.png', './icons/ats-512.png', './icons/ats-192-maskable.png', './icons/ats-512-maskable.png'];
 const FRESH = /\.(html|js|css)$/;
 function networkFirst(req) {
@@ -52,6 +53,7 @@ self.addEventListener('push', e => {
 self.addEventListener('notificationclick', e => {
   e.notification.close(); const url = new URL((e.notification.data && e.notification.data.url) || './', self.registration.scope).href; const go = new URL(url).searchParams.get('go');
   e.waitUntil((async () => { const cs = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    for (const c of cs) { if (c.url.startsWith(self.registration.scope)) { await c.focus().catch(() => { }); if (go) c.postMessage({ type: 'go', go }); return; } }
-    await self.clients.openWindow(url); })());
+    const own = cs.filter(c => c.url.startsWith(self.registration.scope) && c.frameType !== 'nested'); const c = own.find(x => !/ats\.html/.test(x.url)) || own[0];
+    if (c) { await c.focus().catch(() => { }); c.postMessage({ type: 'go', go: go || 'home' }); return; }
+    await self.clients.openWindow(go ? url : new URL('./?ats=1', self.registration.scope).href); })());
 });

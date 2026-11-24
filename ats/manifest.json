@@ -1,13 +1,13 @@
 {
-  "name": "ATS · Auto Trading System",
+  "name": "Deriv Analyzer \u00b7 ATS",
   "short_name": "ATS",
-  "description": "ATS: Rise and Fall, Even/Odd, Over/Under and Matches/Differs bots plus MT5, running 24/7 on your server.",
+  "description": "Deriv Analyzer with its bots, plus Deriv ATS: ATS Bot, Rise and Fall, Even/Odd, Over/Under, Matches/Differs and MT5, running 24/7 on your server.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#0b1222",
-  "theme_color": "#0b1222",
+  "background_color": "#0a0e17",
+  "theme_color": "#0a0e17",
   "icons": [
     {
       "src": "icons/ats-192.png",

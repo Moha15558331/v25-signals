@@ -346,5 +346,8 @@ html[data-theme=light] .dg-panel{--g:#0f9f6e;--gb:#e8f8f1;--gl:#9ad9c0;--r_:#e11
 #abParamsBox{padding:0 var(--pad) var(--pad);border-top:1px solid var(--line)}
 #abParamsBox .fgroup legend{display:none}
 #abActBox{padding:0 var(--pad) 6px;border-top:1px solid var(--line)}
+.ab-scroll{max-height:min(46vh,360px);overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain;touch-action:pan-y;margin:0 calc(var(--pad) * -1);padding:0 var(--pad)}
+.ab-actf{display:flex;justify-content:flex-end;padding:8px 0 6px;border-bottom:1px solid var(--line)}.ab-actf:has(.ab-clear[hidden]){display:none}
+.ab-clear{color:var(--tx3)}.ab-clear.arm{color:var(--dn)}
 .ab-worst{margin:8px 0 0}
 @media (prefers-reduced-motion:reduce){.ab-bar i{transition:none}}

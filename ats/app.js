@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.17.0';
+const APP_VER = '4.18.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -402,6 +402,12 @@ $('abParamsBtn').onclick = () => abToggle(!abOpen);
 let abActOpen = false; // v4.15: Activity collapsed like Parameters until opened
 function abActToggle(open) { abActOpen = open; $('abActBox').hidden = !open; $('abActBtn').setAttribute('aria-expanded', String(open)); $('abActBtn').classList.toggle('open', open); }
 $('abActBtn').onclick = () => abActToggle(!abActOpen);
+/* v4.18: ATS Bot's own Clear history (this account only). Tap twice to confirm. Today's P/L and the daily lock stay (server side). */
+let abClearArm = 0;
+$('abClear').onclick = async () => { const el = $('abClear');
+  if (Date.now() > abClearArm) { abClearArm = Date.now() + 3500; el.classList.add('arm'); el.querySelector('span').textContent = 'Tap again to clear'; setTimeout(() => { if (Date.now() >= abClearArm) { el.classList.remove('arm'); el.querySelector('span').textContent = 'Clear history'; } }, 3600); return; }
+  abClearArm = 0; el.classList.remove('arm'); el.querySelector('span').textContent = 'Clear history';
+  try { const d = await R.act('POST', '/api/atsbot/clear-history'); lastAbRec = ''; toast({ level: 'win', title: 'History cleared', text: `${d.removed} ATS Bot trade${d.removed === 1 ? '' : 's'} removed` }); } catch (e) { errToast(e); } };
 $('abBack').onclick = () => go('home');
 $('abBody').onclick = e => { if (e.target.closest('#abGo')) abGoClick(); else if (e.target.closest('#abReset')) abResetClick(); };
 /* v4.16: demo only (the server refuses on real): clears today's demo lock and restarts the day counter; trades stay in Activity. */
@@ -430,8 +436,9 @@ function renderAB() { const st = R.st; if (!st) return; const x = botOf(st, 'ats
         <button type="button" class="ab-go${x.on ? ' on' : ''}${real ? ' real' : ''}" id="abGo"${dis ? ' disabled' : ''} aria-label="${x.on ? 'Stop' : 'Start'} ATS Bot">${btn}</button></div>
     </section>`;
   if (hero !== lastAbHero) { lastAbHero = hero; $('abBody').innerHTML = hero; }
-  const rec = x.recent.length ? x.recent.slice(0, 8).map(h => tradeRow(Object.assign({ bot_id: 'atsbot' }, h))).join('') : '<li class="empty">No trades yet</li>';
+  const rec = x.recent.length ? x.recent.slice(0, 50).map(h => tradeRow(Object.assign({ bot_id: 'atsbot' }, h))).join('') : '<li class="empty">No trades yet</li>';
   if (rec !== lastAbRec) { lastAbRec = rec; $('abRecent').innerHTML = rec; }
+  $('abClear').hidden = !x.recent.length || x.on; $('abClear').disabled = R.busy;
   const sub = td.trades ? `${td.trades} trade${td.trades === 1 ? '' : 's'} today` : x.recent.length ? 'Recent trades' : 'No trades yet'; if ($('abActSub').textContent !== sub) $('abActSub').textContent = sub;
   abRec = x.ab.recovery || abRec; abMountForm(x); abForm.patch(abVals(x.params)); abForm.setDisabled(x.on); $('abLock').hidden = !x.on; if (!abForm.dirty) $('abWorst').textContent = abWorst(abVals(x.params)); }
 

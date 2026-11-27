@@ -8,6 +8,7 @@ const A = () => window.ATSApp, R = () => window.ATSRemote;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const money = (x, sign) => x == null || isNaN(x) ? '—' : (sign && x > 0 ? '+' : x < 0 ? '−' : '') + '$' + Math.abs(+x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const cls = x => x > 0 ? 'up' : x < 0 ? 'dn' : '';
+const noZone = s => String(s || '').replace(/midnight Bahrain/gi, '00:00').replace(/\bBahrain\b/gi, '').replace(/\s{2,}/g, ' ').trim();
 const tm = ep => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Bahrain', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ep * 1000));
 const dur = s => s < 60 ? Math.max(1, Math.round(s)) + 's' : s < 3600 ? Math.round(s / 60) + 'm' : Math.floor(s / 3600) + 'h ' + Math.round(s % 3600 / 60) + 'm';
 const UP = '<svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>', DN = '<svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';
@@ -80,10 +81,13 @@ function render() { const box = $('mt5Body'); if (!box || !M.tab) return;
   const lo = e.last_order || {};
   put('m5Err', (lo.error ? `<div class="notice bad" role="alert"><span>${esc(lo.error)}</span></div>` : '') + (M.err ? `<div class="notice bad"><span>${esc(M.err)}</span></div>` : ''));
   const dots = set.sessions_on ? `<div class="sdots">${Array.from({ length: ss.count || 0 }, (_, i) => { const lg = (ss.done || [])[i]; const c = lg ? (lg.pnl > 0 ? 'w' : 'l') : i + 1 === ss.n && t.day_state === 'trading' ? 'c' : ''; return `<i class="${c}"></i>`; }).join('')}<span>${(ss.done || []).length}/${ss.count || 0}</span></div>` : '';
-  put('m5Hero', `<section class="card live-card"><div class="lv-top"><div><span class="eyebrow">Today</span><div class="big ${cls(t.pnl)}">${money(t.pnl || 0, true)}</div></div><div class="lv-r"><span class="chip ${stCls}">${esc(stTxt)}</span><small>${a.login ? (a.demo ? 'Demo' : 'Real') : '—'} · ${esc(a.login || '')}</small></div></div>
+  const st = d.stats || {};
+  put('m5Hero', `<section class="card live-card"><div class="lv-top"><div><span class="eyebrow">Today</span><div class="big ${cls(t.pnl)}">${money(t.pnl || 0, true)}</div></div><div class="lv-r"><span class="eyebrow">All time</span><b class="${cls(st.pnl)}">${money(st.pnl || 0, true)}</b><small>${st.n || 0} trades · ${st.n ? Math.round((st.winrate || 0) * 100) + '%' : '—'}</small></div></div>
+    <div class="ab-lv"><span class="chip ${stCls}">${esc(stTxt)}</span><span class="muted small">${a.login ? (a.demo ? 'Demo' : 'Real') : '—'} · ${esc(a.login || '')}</span></div>
     <div class="dbar"><i class="z" style="left:${z}%"></i><i class="f ${pn >= 0 ? 'p' : 'n'}" style="left:${fl}%;width:${fw}%"></i></div><div class="dbar-l"><span>−$${stop_.toFixed(2)}</span><span>+$${lock.toFixed(2)}</span></div>
     <div class="kvs"><div><span class="eyebrow">Trades</span><b>${t.trades || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${t.trades ? Math.round(t.wins / t.trades * 100) + '%' : '—'}</b></div><div><span class="eyebrow">${set.sessions_on ? `Session ${ss.n || 1}/${ss.count || '—'}` : 'Loss streak'}</span><b class="${set.sessions_on ? cls(ss.pnl) : ''}">${set.sessions_on ? money(ss.pnl, true) : (t.loss_streak || 0) + '/' + (set.max_losses || '—')}</b></div><div><span class="eyebrow">Equity</span><b>${a.equity != null ? '$' + Math.round(a.equity).toLocaleString('en-US') : '—'}</b></div></div>
-    ${dots}<p class="lv-msg">${esc(e.reason || '')}</p>
+    ${dots}<p class="lv-msg">${esc(noZone(e.reason || ''))}</p>
+    ${(window.ATSSince || (() => ''))(d.started_at)}
     <button type="button" class="btn ${run ? 'ghost' : 'primary'} block" id="mt5Toggle"${M.busy || e.state === 'refused' ? ' disabled' : ''}>${run ? 'Stop MT5 bot' : 'Start MT5 bot'}</button></section>`);
   const ac = d.account || {}, real = ac.mode === 'real', sw_ = !!ac.switching;
   put('m5Acc', `<section class="card acct-card${real ? ' is-real' : ''}"><div class="card-h"><h3>Account</h3><span class="muted">${sw_ ? 'Switching…' : esc((real ? ac.real : ac.demo) ? (real ? ac.real.login + ' · ' + ac.real.server : ac.demo.login + ' · ' + ac.demo.server) : '')}</span></div>

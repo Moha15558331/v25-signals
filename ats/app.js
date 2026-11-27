@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.20.0';
+const APP_VER = '4.21.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -26,6 +26,12 @@ const pct = (x, d = 1) => x == null ? '—' : (x * 100).toFixed(d) + '%';
 const cls = x => x > 0 ? 'up' : x < 0 ? 'dn' : '';
 const fmtT = (ep, withDay) => new Intl.DateTimeFormat('en-GB', Object.assign({ timeZone: 'Asia/Bahrain', hour: '2-digit', minute: '2-digit', second: withDay ? undefined : '2-digit', hour12: false }, withDay ? { day: 'numeric', month: 'short' } : {})).format(new Date(ep * 1000));
 const hm = ep => fmtT(ep).slice(0, 5);
+/** e.g. 'Running since Wed 25 Nov, 09:29' — no time-zone name. */
+function sinceLine(ep) { if (!(+ep > 0)) return ''; const p = {};
+  new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Bahrain', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(new Date(ep * 1000)).forEach(x => { p[x.type] = x.value; });
+  return 'Running since ' + p.weekday + ' ' + p.day + ' ' + p.month + ', ' + p.hour + ':' + p.minute; }
+const sinceHtml = ep => { const s = sinceLine(ep); return s ? `<p class="muted small">${s}</p>` : ''; };
+window.ATSSince = sinceHtml;
 const I = {
   play: '<svg viewBox="0 0 24 24"><path d="M8 5.5v13l11-6.5z" fill="currentColor" stroke="none"/></svg>',
   stop: '<svg viewBox="0 0 24 24"><rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor" stroke="none"/></svg>',
@@ -56,15 +62,15 @@ const capOn = real => !!(real && +real.lifetime_cap > 0);
 function botOf(st, id) {
   if (id === 'ats') { const v = st.classic || {}, b = st.bot, p = v.params || {};
     return { id, name: 'Rise and Fall', mono: 'RF', running: b.running, open: b.open, on: !!(b.running || b.open), state: b.state, msg: b.msg, halt: b.halt_reason, day: v.day || {}, ses: v.sessions, params: p, next: v.next,
-      step: v.step || 0, recent: v.recent || [], stats: v.stats || {}, pos: v.position, signal: v.signal, skip: v.last_skip, view: v,
+      step: v.step || 0, recent: v.recent || [], stats: v.stats || {}, pos: v.position, signal: v.signal, skip: v.last_skip, view: v, started_at: b.started_at || v.started_at,
       market: `V25 (1s) · ${p.cycle === 'ticks' ? p.ticks + ' ticks' : (p.cycle || '5m') + ' candles'}`, contract: 'Rise / Fall' }; }
   const v = (st.bots || {})[id]; if (!v) return null; const p = v.effective || v.params || {};
   if (id === 'atsbot') { const ab = v.ab || { run: {}, today: {} };
     return { id, name: 'ATS Bot', mono: 'AB', running: v.running, open: v.open, on: v.on, state: v.state, msg: v.msg, halt: v.halt_reason, day: v.day || {}, params: p, next: v.next, step: v.step || 0,
-      recent: v.recent || [], stats: v.stats || {}, pos: v.position, view: v, ab, outcome: ab.outcome || 'idle', market: `target ${money(+p.target || 0)}`, contract: 'Auto trading' }; }
+      recent: v.recent || [], stats: v.stats || {}, pos: v.position, view: v, ab, outcome: ab.outcome || 'idle', started_at: v.started_at || (ab.run && ab.run.started_at), market: `target ${money(+p.target || 0)}`, contract: 'Auto trading' }; }
   const contract = id === 'evenodd' ? (p.side === 'both' ? 'Even or Odd' : p.side === 'even' ? 'Even' : 'Odd') : id === 'overunder' ? (p.side === 'both' ? `Over ${p.over_digit} or Under ${p.under_digit}` : p.side === 'over' ? `Over ${p.over_digit}` : `Under ${p.under_digit}`) : (p.side === 'match' ? 'Matches' : 'Differs') + (p.digit_src === 'user' ? ' ' + p.digit : p.digit_src === 'random' ? ' · random digit' : ' · market digit');
   return { id, name: v.name, mono: BOT[id].mono, running: v.running, open: v.open, on: v.on, state: v.state, msg: v.msg, halt: v.halt_reason, day: v.day || {}, ses: v.sessions, params: p, next: v.next, step: v.step || 0,
-    recent: v.recent || [], stats: v.stats || {}, pos: v.position, analysis: v.analysis, view: v, mgFactor: v.mg_factor, ratio: v.payout_ratio,
+    recent: v.recent || [], stats: v.stats || {}, pos: v.position, analysis: v.analysis, view: v, mgFactor: v.mg_factor, ratio: v.payout_ratio, started_at: v.started_at,
     market: `${symShort(p.symbol)} · ${p.ticks} tick${+p.ticks === 1 ? '' : 's'}`, contract };
 }
 const allBots = st => BOTS.map(b => botOf(st, b.id)).filter(Boolean);
@@ -344,6 +350,7 @@ function liveHtml(x) { const d = x.day || {}, ss = x.ses, pos = x.pos;
     <div class="kvs"><div><span class="eyebrow">Trades</span><b>${d.trades || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${d.trades ? Math.round(d.wins / d.trades * 100) + '%' : '—'}</b></div><div><span class="eyebrow">Next stake</span><b>${x.next && x.next.stake ? money(x.next.stake) : money(x.params.stake)}</b></div><div><span class="eyebrow">Martingale</span><b>${mg}</b></div></div>
     ${ss && ss.on ? `<div class="ses-row"><span>${d.state !== 'trading' || ss.done >= ss.count ? `${Math.min(ss.done, ss.count)}/${ss.count} sessions` : `Session ${ss.current}/${ss.count} · ${money(ss.pnl, true)}`}${ss.until ? ' · next ' + hm(ss.until) : ''}</span>${sesDots(ss, d.state)}</div>` : ''}
     <p class="lv-msg">${esc(botLine(x))}</p>
+    ${sinceHtml(x.started_at)}
     ${pos ? `<div class="pos"><span class="eyebrow">Open contract</span><b>${esc(pos.label || sideLabel(pos.type, pos.barrier) || (pos.dir === 'up' ? 'Rise' : 'Fall'))} · ${money(pos.stake)}</b>${pos.pnl != null ? `<span class="${cls(pos.pnl)}">${money(pos.pnl, true)}</span>` : ''}</div>` : ''}</section>`; }
 let lastLive = '', lastAn = '', lastBR = '';
 function renderBot() { const st = R.st; if (!st) return; const x = botOf(st, botId); if (!x) { go('home'); return; }
@@ -437,11 +444,11 @@ function renderAB() { const st = R.st; if (!st) return; const x = botOf(st, 'ats
   const btn = x.on ? (x.running ? I.stop + '<span>Stop</span>' : '<span>Stopping…</span>') : locked ? I.lock + '<span>Locked</span>' : I.play + '<span>Start</span>';
   const hero = `<section class="card ab-hero${x.on ? ' is-on' : ''}${real ? ' is-real' : ''}">
       <div class="ab-top"><span class="ab-logo">${AB_ICON}</span><div class="ab-id"><b>ATS Bot</b><small>Auto trading · ${real ? 'Real' : 'Demo'}</small></div><span class="chip ${cc}">${ct}</span></div>
-      <div class="ab-row"><div><span class="eyebrow">Today</span><b class="ab-pnl ${cls(td.pnl)}">${money(td.pnl || 0, true)}</b></div><div class="ab-tgt"><span class="eyebrow">Target</span><b>${money(t)}</b></div></div>
+      <div class="ab-row"><div><span class="eyebrow">Today</span><b class="ab-pnl ${cls(td.pnl)}">${money(td.pnl || 0, true)}</b></div><div class="lv-r"><span class="eyebrow">All time</span><b class="${cls(x.stats.pnl)}">${money((x.stats && x.stats.pnl) || 0, true)}</b><small>${(x.stats && x.stats.n) || 0} trades · ${pct(x.stats && x.stats.winrate, 0)}</small></div></div>
       ${abBar(td.pnl, t)}
       <div class="ab-lv"><span>${lv}% of target</span><span>${money(Math.max(0, t - (+td.pnl || 0)))} to go</span></div>
       <div class="ab-stats"><div><span class="eyebrow">Wins</span><b class="up">${td.wins || 0}</b></div><div><span class="eyebrow">Losses</span><b class="${td.losses ? 'dn' : ''}">${td.losses || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${abWr(td)}</b></div><div><span class="eyebrow">Trades</span><b>${td.trades || 0}</b></div></div>
-      <div class="ab-act"><div class="ab-st"><p class="ab-msg${locked ? ' locked' : ''}${abAnalysing(x) ? ' analysing' : ''}">${locked ? I.lock : ''}<span>${esc(abStatus(x))}</span></p>${!real && x.ab.can_reset && !x.on && (lk || td.trades) ? `<button type="button" class="ab-reset" id="abReset"${R.busy ? ' disabled' : ''}>${AB_RESET}<span>Reset day</span></button>` : ''}</div>
+      <div class="ab-act"><div class="ab-st"><p class="ab-msg${locked ? ' locked' : ''}${abAnalysing(x) ? ' analysing' : ''}">${locked ? I.lock : ''}<span>${esc(abStatus(x))}</span></p>${sinceHtml(x.started_at)}${!real && x.ab.can_reset && !x.on && (lk || td.trades) ? `<button type="button" class="ab-reset" id="abReset"${R.busy ? ' disabled' : ''}>${AB_RESET}<span>Reset day</span></button>` : ''}</div>
         <button type="button" class="ab-go${x.on ? ' on' : ''}${real ? ' real' : ''}" id="abGo"${dis ? ' disabled' : ''} aria-label="${x.on ? 'Stop' : 'Start'} ATS Bot">${btn}</button></div>
     </section>`;
   if (hero !== lastAbHero) { lastAbHero = hero; $('abBody').innerHTML = hero; }

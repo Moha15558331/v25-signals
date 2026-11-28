@@ -527,37 +527,7 @@
     // account badge mirrors the wallet (gold on Real)
     const src = $('rfAccountMode'); const sync = () => IDS.forEach(id => { const e = $(id + 'AccountMode'); if (e && src) { e.textContent = src.textContent; e.className = src.className; } });
     if (src) new MutationObserver(sync).observe(src, { attributes: true, childList: true, characterData: true, subtree: true }); sync();
-    scanLoop(); initTrending();
-  }
-  /* Home · Trending: same trend % the range bots use (net move ÷ total distance over the analysed ticks). */
-  function initTrending() {
-    const sig = $('signalCard'); if (!sig || $('trendCard')) return;
-    const css = document.createElement('style');
-    css.textContent = '#trendCard{margin-top:12px}.tr-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.tr-cell{border:1px solid var(--line);border-radius:12px;padding:10px;background:var(--bg3);min-width:0}'
-      + '.tr-lab{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted)}.tr-mk{font-size:14px;font-weight:700;margin:4px 0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}'
-      + '.tr-v{font-size:12px;font-weight:800;display:flex;align-items:center;gap:6px}.tr-v .up{color:var(--green)}.tr-v .dn{color:var(--red)}.tr-v .fl{color:var(--muted)}.tr-bar{height:4px;border-radius:3px;background:var(--line);margin-top:6px;overflow:hidden}.tr-bar i{display:block;height:100%;background:var(--green)}'
-      + '.tr-info{font-size:11px;color:var(--muted);margin-top:8px;line-height:1.4}.tr-i{cursor:pointer;color:var(--muted);font-weight:700;border:1px solid var(--line2);border-radius:50%;width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:11px}';
-    document.head.appendChild(css);
-    sig.insertAdjacentHTML('afterend', `<div class="card full" id="trendCard"><div class="card-title"><span>Trending</span><span class="tr-i" id="trInfoBtn" role="button" aria-label="How is this calculated?">i</span></div>
-      <div class="tr-grid"><div class="tr-cell"><div class="tr-lab">Most trending</div><div class="tr-mk" id="trTopName">Scanning…</div><div class="tr-v" id="trTopVal">—</div><div class="tr-bar"><i id="trTopBar" style="width:0"></i></div></div>
-      <div class="tr-cell"><div class="tr-lab">Least trending</div><div class="tr-mk" id="trLowName">Scanning…</div><div class="tr-v" id="trLowVal">—</div><div class="tr-bar"><i id="trLowBar" style="width:0"></i></div></div></div>
-      <div class="tr-info" id="trInfo" hidden></div></div>`);
-    $('trInfoBtn').onclick = () => { const e = $('trInfo'); e.hidden = !e.hidden; };
-    const ticks = () => Math.max(20, Math.min(1000, +($('ticks') && $('ticks').value) || 100));
-    const arrow = x => x.m.er < 0.05 ? '<span class="fl">↔</span>' : x.m.dir > 0 ? '<span class="up">▲</span>' : '<span class="dn">▼</span>';
-    const put = (k, x) => { $('tr' + k + 'Name').textContent = x.name; $('tr' + k + 'Val').innerHTML = arrow(x) + ' ' + (x.m.er * 100).toFixed(1) + '%'; $('tr' + k + 'Bar').style.width = Math.min(100, x.m.er * 100).toFixed(0) + '%'; };
-    let timer = null;
-    async function tick() {
-      clearTimeout(timer); const home = $('viewHome');
-      if (!document.hidden && home && !home.hidden && !document.body.classList.contains('ats-open')) {
-        try { const n = ticks(); const list = (await scanner.scan(n)).filter(x => x && x.m);
-          if (list.length) { const top = list.reduce((a, b) => (b.m.er > a.m.er ? b : a)), low = list.reduce((a, b) => (b.m.er < a.m.er ? b : a)); put('Top', top); put('Low', low);
-            $('trInfo').textContent = 'Trend % = how directly price moved over the last ' + n + ' ticks: net move ÷ total distance travelled tick by tick. 100% = straight line, near 0% = went back and forth (ranging). Arrow = direction of the net move. Same value the Touch, Ends and Stays bots use.'; } } catch (_) { }
-      }
-      timer = setTimeout(tick, 12000);
-    }
-    tick();
-    if ($('ticks')) $('ticks').addEventListener('change', () => setTimeout(tick, 300));
+    scanLoop();
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init); else init();
   root.ADB = { UI, scanFor, start, stop, reset, settingsOf };

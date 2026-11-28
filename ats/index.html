@@ -9,7 +9,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ATS">
 <meta name="application-name" content="Deriv Analyzer">
-<meta name="app-version" content="5.3.0">
+<meta name="app-version" content="5.3.1">
 <title>Deriv Analyzer</title>
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
@@ -348,6 +348,12 @@ body.theme-light .pg-chip.b{background:#fff1f2;border-color:#fecdd3;color:#e11d4
 .sig-row-inner.t-under::before{background:#67e8f9}
 .sig-row-inner.t-most::before{background:#34d399}
 .sig-row-inner.t-least::before{background:#fb7185}
+.sig-row-inner.t-trending::before{background:#818cf8}
+.sig-row-inner.t-ranging::before{background:#94a3b8}
+.sig-pct.indigo{color:#4f46e5;border-color:#c7d2fe}
+.sig-pct.slate{color:#475569;border-color:#cbd5e1}
+body.theme-dark .sig-pct.indigo{color:#a5b4fc;border-color:#2a2a4a}
+body.theme-dark .sig-pct.slate{color:#94a3b8;border-color:#2a3344}
 .sig-row-inner.changed{animation:sigPop 1.6s ease}
 @keyframes sigPop{
   0%{ box-shadow:0 0 0 0 rgba(46,229,157,0); transform:scale(1) }
@@ -3670,6 +3676,14 @@ function pipOf(quote, size) {
 }
 
 // Same math as the main analyze() function so percentages match
+function trendOf(prices) {
+  if (!prices || prices.length < 2) return { er: 0, dir: 0 };
+  let path = 0;
+  for (let i = 1; i < prices.length; i++) path += Math.abs(prices[i] - prices[i - 1]);
+  const net = prices[prices.length - 1] - prices[0];
+  return { er: path > 0 ? Math.abs(net) / path : 0, dir: net >= 0 ? 1 : -1 };
+}
+
 function statsFromPrices(name, priceList, digitList) {
   const n = digitList.length;
   if (n < 2) return null;
@@ -3715,7 +3729,8 @@ function statsFromPrices(name, priceList, digitList) {
     mostPct: (freq[mostD] / n) * 100,
     leastDigit: leastD,
     leastPct: (freq[leastD] / n) * 100,
-    even, odd, over, under, rise, fall
+    even, odd, over, under, rise, fall,
+    ...trendOf(priceList)
   };
 }
 
@@ -3787,7 +3802,8 @@ function statsFromCurrentMarket(name) {
     mostPct: (freq[mostD] / n) * 100,
     leastDigit: leastD,
     leastPct: (freq[leastD] / n) * 100,
-    even, odd, over, under, rise, fall
+    even, odd, over, under, rise, fall,
+    ...trendOf(priceList)
   };
 }
 
@@ -3868,6 +3884,9 @@ function renderSignals() {
   };
   const bestOver = digitResults.length ? digitResults.reduce((a, b) => calcHomePct(b, true) > calcHomePct(a, true) ? b : a) : null;
   const bestUnder = digitResults.length ? digitResults.reduce((a, b) => calcHomePct(b, false) > calcHomePct(a, false) ? b : a) : null;
+  const withEr = scanResults.filter(r => r && r.er != null);
+  const bestTrend = withEr.length ? withEr.reduce((a, b) => (b.er > a.er ? b : a)) : null;
+  const leastTrend = withEr.length ? withEr.reduce((a, b) => (b.er < a.er ? b : a)) : null;
   const bestMost = bestDigit("mostPct");
   const bestLeast = digitResults.length ? digitResults.reduce((a, b) => (b.leastPct < a.leastPct ? b : a)) : scanResults[0];
 
@@ -3879,7 +3898,9 @@ function renderSignals() {
     { id: "over", type: "over", pctCls: "purple", label: "Most Over " + overVal, market: bestOver ? bestOver.name : "—", pct: bestOver ? calcHomePct(bestOver, true).toFixed(1) + "%" : "—" },
     { id: "under", type: "under", pctCls: "cyan", label: "Most Under " + underVal, market: bestUnder ? bestUnder.name : "—", pct: bestUnder ? calcHomePct(bestUnder, false).toFixed(1) + "%" : "—" },
     { id: "most", type: "most", pctCls: "up", label: "Most Occurring Digit", market: bestMost.name, pct: "D" + bestMost.mostDigit + " · " + bestMost.mostPct.toFixed(1) + "%" },
-    { id: "least", type: "least", pctCls: "down", label: "Least Occurring Digit", market: bestLeast.name, pct: "D" + bestLeast.leastDigit + " · " + bestLeast.leastPct.toFixed(1) + "%" }
+    { id: "least", type: "least", pctCls: "down", label: "Least Occurring Digit", market: bestLeast.name, pct: "D" + bestLeast.leastDigit + " · " + bestLeast.leastPct.toFixed(1) + "%" },
+    { id: "trending", type: "trending", pctCls: "indigo", label: "Most Trending", market: bestTrend ? bestTrend.name : "—", pct: bestTrend ? (bestTrend.er * 100).toFixed(1) + "%" : "—" },
+    { id: "ranging", type: "ranging", pctCls: "slate", label: "Least Trending", market: leastTrend ? leastTrend.name : "—", pct: leastTrend ? (leastTrend.er * 100).toFixed(1) + "%" : "—" }
   ];
 
   grid.innerHTML = cards.map(c => {
@@ -7864,7 +7885,7 @@ function updateTechnicalsFromData() {
   </div>
 </div>
 
-<script src="analyzer-bots.js?v=5"></script>
+<script src="analyzer-bots.js?v=6"></script>
 <script src="shell.js?v=1"></script>
 </body>
 </html>

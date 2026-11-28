@@ -51,7 +51,7 @@ test('proposal request shape', () => {
   assert.equal(C.proposalReq('as', 'up', 'R_10', 1, 5, 't', {}).barrier, undefined);
 });
 test('auto martingale: one win pays back the losses plus the normal profit', () => {
-  const s = { stake: 0.35, mart: 0, tp: 1, sl: 5, steps: 3, smart: false };
+  const s = { stake: 0.35, mart: 0, tp: 1, sl: 20, steps: 3, smart: false };
   const st = C.newState(); st.baseRatio = 0.28;
   assert.equal(C.nextStake(st, s, 0.28), 0.35);
   C.applyResult(st, -0.35);
@@ -66,6 +66,9 @@ test('manual martingale and smart cap', () => {
   assert.equal(C.nextStake(st, { stake: 0.35, mart: 2.1, sl: 10 }), 1.55); // 0.35·2.1² = 1.5435 → 1.55
   assert.equal(C.nextStake(st, { stake: 0.35, mart: 2.1, sl: 1.5, smart: true }), 0.41); // room = 1.5 − 1.09
   assert.equal(C.mart0('Auto'), 0); assert.equal(C.mart0(''), 0); assert.equal(C.mart0('2.5'), 2.5); assert.equal(C.mart0('0.5'), 1);
+  assert.equal(C.nextStake(st, { stake: 0.35, mart: 2.1, sl: 10, mgOn: false }), 0.35); // flat stake
+  assert.equal(C.nextStake(st, { stake: 0.35, mart: 11, sl: 2.5, smart: true }), 1.41); // size to remaining room (2.50−1.09)
+  assert.equal(C.nextStake(st, { stake: 0.35, mart: 11, sl: 1.2, smart: false }), 0); // skip rather than pass the stop
 });
 test('stops: TP, SL, martingale steps', () => {
   const s = { tp: 1, sl: 2, steps: 2 };

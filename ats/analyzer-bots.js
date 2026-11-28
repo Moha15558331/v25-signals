@@ -160,11 +160,17 @@
    *  payout ratio so one win pays back every loss since the last win plus the normal profit. */
   function nextStake(st, s, ratio) {
     let stake;
-    if (st.consec === 0) stake = s.stake;
+    if (s.mgOn === false || st.consec === 0) stake = s.stake;
     else if (s.mart > 0) stake = s.stake * Math.pow(s.mart, st.consec);
     else { const r = ratio || st.baseRatio || 1; stake = (st.lossRun + s.stake * (st.baseRatio || r)) / r; }
-    if (s.smart && st.consec > 0) { const room = s.sl - Math.max(0, -st.sessionPL); if (stake > room) stake = Math.max(s.stake, room); }
-    return Math.max(MIN_STAKE, st.consec === 0 ? r2(stake) : ceil2(stake));
+    if (st.consec > 0 && s.mgOn !== false) {
+      const room = r2((+s.sl || 0) + Math.min(0, +st.sessionPL || 0)); // $ left before the session stop
+      if (stake > room + 1e-9) {
+        if (s.smart !== false && room >= MIN_STAKE - 1e-9) stake = room;
+        else return 0; // skip — a recovery loss would pass the stop
+      }
+    }
+    return stake <= 0 ? 0 : Math.max(MIN_STAKE, st.consec === 0 ? r2(stake) : ceil2(stake));
   }
   function applyResult(st, pl) {
     st.trades++; st.sessionPL = r2(st.sessionPL + pl);
@@ -222,6 +228,7 @@
         const auto = !(this.s.mart > 0) && this.st.consec > 0;
         const tgt = this.s.autoBarrier && BOTS[this.bot].barrier ? ((this.s.targets && this.s.targets[p.side]) || TARGET[this.bot][p.side]) / 100 : 0;
         stake = nextStake(this.st, this.s, auto && tgt ? tgt : undefined); // recovery: size for the target payout first
+        if (!stake) { this.io.log({ type: 'wait', text: 'No room left under the stop' }); return null; }
         q = await this.quote(p, stake);
         if (q) break;
         this.skip[skipKey(p.sym, p.side)] = now + 60000;
@@ -378,7 +385,8 @@
         <div class="rf-field"><label>Duration</label><div class="rf-dur"><input type="number" id="${id}Dur" value="${B.dur[0]}" min="1"><select id="${id}DurUnit">${units}</select></div></div>
         ${B.barrier ? `<div class="rf-field"><label class="adb-lab">Barrier<span class="adb-auto"><input type="checkbox" id="${id}BarAuto" checked aria-label="Auto barrier"><span>Auto</span></span></label><input type="text" id="${id}Barrier" value="" placeholder="Auto" inputmode="decimal" disabled><div class="adb-hint" id="${id}BarHint">Set before each trade</div></div>
         <div class="rf-field" id="${id}TgtField"><label>Target payout %</label><div class="rf-dur adb-tgt"><input type="number" id="${id}TgtA" value="${(TARGET[id] || {})[a[0]] || ''}" min="1" step="1" aria-label="${a[1]} target %"><input type="number" id="${id}TgtB" value="${(TARGET[id] || {})[b[0]] || ''}" min="1" step="1" aria-label="${b[1]} target %"></div><div class="adb-hint">${a[1]} · ${b[1]}</div></div>` : ''}</div>
-      <div class="rf-switch-row"><span>Smart Martingale</span><label class="rf-switch"><input type="checkbox" id="${id}Smart"><span class="rf-slider"></span></label></div>
+      <div class="rf-switch-row"><span>Martingale</span><label class="rf-switch"><input type="checkbox" id="${id}MgOn" checked><span class="rf-slider"></span></label></div>
+      <div class="rf-switch-row"><span>Smart Martingale</span><label class="rf-switch"><input type="checkbox" id="${id}Smart" checked><span class="rf-slider"></span></label></div>
       <div class="rf-btns"><button type="button" class="rf-btn start" id="${id}Start">Start</button><button type="button" class="rf-btn stop" id="${id}Stop" disabled>Stop</button><button type="button" class="rf-btn reset" id="${id}Reset">Reset</button></div>
       <div class="rf-session-bar"><div class="rf-session-pill" id="${id}PillPL"><div class="sp-label">Session P/L</div><div class="sp-val" id="${id}SessPL">$0.00</div></div>
         <div class="rf-session-pill"><div class="sp-label">Wins</div><div class="sp-val" id="${id}SessWins">0</div></div><div class="rf-session-pill"><div class="sp-label">Losses</div><div class="sp-val" id="${id}SessLosses">0</div></div></div>
@@ -400,8 +408,8 @@
     if (v('TgtA')) { targets[B.sides[0][0]] = Math.max(1, +v('TgtA').value || TARGET[id][B.sides[0][0]]); targets[B.sides[1][0]] = Math.max(1, +v('TgtB').value || TARGET[id][B.sides[1][0]]); }
     return { side: seg('SideSeg') || 'both', withSignal: seg('SigSeg') !== 'without', market: v('Market').value,
       stake: Math.max(0.35, +v('Stake').value || 0.35), tp: Math.max(0.1, +v('TP').value || 1), sl: Math.max(0.1, +v('SL').value || 2),
-      mart: mart0(v('Mart').value), steps: (() => { const s = +v('Steps').value; return s === 0 ? 0 : Math.max(1, s || 2); })(),
-      smart: !!v('Smart').checked, dur, unit, autoBarrier, targets, barrier: autoBarrier || /^auto$/i.test(bar) || bar === '' ? 0 : Math.abs(+bar) || 0, ticks: Math.max(20, Math.min(1000, +v('Ticks').value || 100)) };
+      mgOn: !v('MgOn') || v('MgOn').checked, mart: mart0(v('Mart').value), steps: (() => { const s = +v('Steps').value; return s === 0 ? 0 : Math.max(1, s || 2); })(),
+      smart: !v('Smart') || v('Smart').checked, dur, unit, autoBarrier, targets, barrier: autoBarrier || /^auto$/i.test(bar) || bar === '' ? 0 : Math.abs(+bar) || 0, ticks: Math.max(20, Math.min(1000, +v('Ticks').value || 100)) };
   }
   const money = x => (x >= 0 ? '+' : '-') + '$' + Math.abs(x).toFixed(2);
   function sideLabel(id, k) { const s = BOTS[id].sides.find(z => z[0] === k); return s ? s[1] : k; }

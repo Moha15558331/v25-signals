@@ -73,6 +73,14 @@ function build(box) { box.innerHTML = `<div id="m5Err"></div><div class="mt5-gri
 function put(id, html) { if (M.last[id] !== html) { M.last[id] = html; $(id).innerHTML = html; } }
 function render() { const box = $('mt5Body'); if (!box || !M.tab) return;
   if (!M.d) { M.built = false; box.innerHTML = `<div class="card"><p class="muted">${esc(M.err || 'Loading…')}</p></div>`; return; }
+  if (!M.d.ea && (M.d.configured === false || M.d.full || !M.d.running)) {
+    M.built = false;
+    const line = M.d.full ? (M.d.error || 'This server is full') : M.d.configured ? (M.d.error || 'Terminal is not running yet') : 'Save your MT5 server, login and password in Settings first.';
+    box.innerHTML = `<section class="card"><div class="card-h"><h3>MT5</h3></div><p class="muted" style="padding:0 16px 16px">${esc(line)}</p>
+      <div style="padding:0 16px 16px"><button type="button" class="btn primary block" id="mt5ToSettings">Settings</button></div></section>`;
+    const b = $('mt5ToSettings'); if (b && window.ATSApp) b.onclick = () => window.ATSApp.go('settings');
+    return;
+  }
   if (!M.built || !$('m5Form')) build(box);
   const d = M.d, e = d.ea || {}, a = e.account || {}, s = e.symbol || {}, t = e.today || {}, ss = e.session || {}, p = e.position, g = e.signal || {}, set = e.settings || {}, rec = e.recovery || null;
   const [stTxt, stCls] = chip(d), run = d.control === 'run';

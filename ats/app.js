@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.24.1';
+const APP_VER = '4.24.2';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -224,6 +224,7 @@ function friendify(s) {
   if (!t) return '';
   if (/no demo token|deriv-demo\.env|\/opt\/ats\/.secrets\/deriv-demo/i.test(t)) return 'Add your Deriv demo token.';
   if (/no real token|DERIV_REAL|deriv-real/i.test(t)) return 'Add your Deriv real token to use Real.';
+  if (/Deriv-App-ID header is required|app id required/i.test(t)) return 'Could not connect to Deriv. Try saving your token again.';
   return t.replace(/\/opt\/ats\/\S+/gi, '').replace(/\.secrets\/\S+/gi, '').replace(/DERIV_[A-Z0-9_]+/g, '').replace(/\s{2,}/g, ' ').trim();
 }
 function accountName() { const me = R.st && R.st.me; if (me && me.name) return me.name; try { const n = localStorage.getItem(NAME_KEY); if (n) return n; } catch (e) { } return 'Trader'; }
@@ -556,7 +557,11 @@ function renderSettings() { const st = R.st, el = $('setBody');
       ${st.me && st.me.role === 'admin' ? `<div class="row"><div class="l"><b>${st.me.flags && st.me.flags.demo ? 'Demo connected' : 'Demo'}</b><small>${st.me.flags && st.me.flags.real ? 'Real token is on the server' : 'Tokens stay on the server'}</small></div></div>` : `<p class="muted">Add your Deriv token. It is saved encrypted and never shown to anyone else.</p>
       <div class="row"><div class="l"><b>Demo token</b><small>${st.me && st.me.flags && st.me.flags.demo ? 'Connected' : 'Add your Deriv demo token'}</small></div></div>
       <input type="password" id="tokDemo" class="field" placeholder="${st.me && st.me.flags && st.me.flags.demo ? 'Token saved · paste to replace' : 'Demo API token'}" autocomplete="off" spellcheck="false">
-      <input type="text" id="tokApp" class="field" placeholder="Deriv app ID (optional)" inputmode="numeric" autocomplete="off">
+      <button type="button" class="link" id="tokAdv" style="margin:4px 0 8px">Advanced</button>
+      <div id="tokAdvBox" hidden>
+        <div class="row"><div class="l"><b>App ID</b><small>Optional override. Leave blank to use the server default.</small></div></div>
+        <input type="text" id="tokApp" class="field" placeholder="App ID (optional)" autocomplete="off" spellcheck="false">
+      </div>
       <div class="row"><div class="l"><b>Real token</b><small>${st.me && st.me.flags && st.me.flags.real ? 'Connected · you flip Real yourself' : 'Optional. Real stays off until you flip it'}</small></div></div>
       <input type="password" id="tokReal" class="field" placeholder="${st.me && st.me.flags && st.me.flags.real ? 'Token saved · paste to replace' : 'Real API token'}" autocomplete="off" spellcheck="false">
       <button type="button" class="btn primary block" id="tokSave">Save tokens</button>
@@ -588,6 +593,7 @@ function renderSettings() { const st = R.st, el = $('setBody');
         setSig = ''; renderSettings();
       } catch (e) { if (err) err.textContent = e.message; }
     };
+    if (q('tokAdv') && q('tokAdvBox')) q('tokAdv').onclick = () => { const box = q('tokAdvBox'); box.hidden = !box.hidden; };
     if (q('tokSave')) q('tokSave').onclick = async () => {
       const err = q('tokErr'); err.textContent = '';
       const demo = (q('tokDemo').value || '').trim(), real = (q('tokReal').value || '').trim(), app = (q('tokApp').value || '').trim();

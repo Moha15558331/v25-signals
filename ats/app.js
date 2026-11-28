@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.23.0';
+const APP_VER = '4.24.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -192,7 +192,7 @@ function dgSchema(id) {
 /* ---------- navigation ---------- */
 let view = 'home', botId = 'ats';
 const VIEWS = ['home', 'bot', 'ab', 'mt5', 'stats', 'history', 'settings', 'users'];
-function go(v, arg) { if (v === 'bot' && arg) botId = arg; if (v === 'bot' && botId === 'atsbot') v = 'ab'; else if (v === 'ab') botId = 'atsbot'; if (v === 'mt5' && R.st && R.st.me && R.st.me.role !== 'admin') v = 'home'; view = v; if (window.ATSMT5) window.ATSMT5.show(v === 'mt5', v === 'home');
+function go(v, arg) { if (v === 'bot' && arg) botId = arg; if (v === 'bot' && botId === 'atsbot') v = 'ab'; else if (v === 'ab') botId = 'atsbot'; view = v; if (window.ATSMT5) window.ATSMT5.show(v === 'mt5', v === 'home');
   for (const x of VIEWS) { const el = $('v-' + x); if (el) el.hidden = x !== v; }
   const tab = v === 'bot' || v === 'ab' ? 'home' : v; document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.go === tab));
   R.wantHist = v === 'history' ? histBot : v === 'bot' || v === 'ab' ? null : R.wantHist;
@@ -202,7 +202,7 @@ document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.datas
 
 /* ---------- header ---------- */
 function renderHeader() { const st = R.st; const anyOn = st && allBots(st).some(x => x.on);
-  const mt5Tab = document.querySelector('#tabbar [data-go=mt5]'); if (mt5Tab) mt5Tab.hidden = !!(st && st.me && st.me.role && st.me.role !== 'admin');
+  const mt5Tab = document.querySelector('#tabbar [data-go=mt5]'); if (mt5Tab) mt5Tab.hidden = false;
 
   const badge = $('modeBadge'); badge.className = 'badge ' + (!st ? 'off' : isReal(st) ? 'real' : '');
   $('modeTxt').textContent = !st ? (R.hasKey() ? (R.err ? 'OFFLINE' : 'CONNECTING') : 'NOT PAIRED') : isReal(st) ? 'REAL' : 'DEMO';
@@ -217,6 +217,7 @@ function renderHeader() { const st = R.st; const anyOn = st && allBots(st).some(
 /* ---------- home ---------- */
 const NAME_KEY = 'ats.name';
 const isAdmin = () => !!(R.st && R.st.me && R.st.me.role === 'admin');
+const hasMt5Ui = () => !!(R.st && R.st.me);
 function accountName() { const me = R.st && R.st.me; if (me && me.name) return me.name; try { const n = localStorage.getItem(NAME_KEY); if (n) return n; } catch (e) { } return 'Trader'; }
 function editName() { const cur = accountName();
   sheet(`<h2>Your name</h2><p>Shown on the welcome screen. Stored only on this device.</p><input class="field" id="nmIn" maxlength="40" autocomplete="off" value="${esc(cur === 'Trader' ? '' : cur)}" placeholder="Name"><div class="btns"><button type="button" class="btn primary block" id="nmOk">Save</button><button type="button" class="btn ghost block" id="nmNo">Cancel</button></div>`, s => {
@@ -241,6 +242,10 @@ function cardHtml(x, real) { if (x.id === 'atsbot') return abCardHtml(x, real); 
     <footer class="bc-f"><button type="button" class="btn ${x.on ? 'ghost' : real && !demoOnly ? 'real' : 'primary'} sm" data-act="go"${R.busy || (x.open && !x.running) || demoOnly ? ' disabled' : ''}>${x.on ? (x.running ? I.stop + 'Stop' : 'Stopping…') : I.play + 'Start'}</button><button type="button" class="btn ghost sm" data-act="open">Details${I.chev}</button></footer>
   </article>`; }
 function mt5CardHtml() { const M = window.ATSMT5 && window.ATSMT5.data(); if (!M) return `<article class="bcard" data-bot="mt5"><header class="bc-h"><span class="mono">M5</span><div class="bc-t"><b>MT5</b><small>V25 (1s) CFD · Deriv-Demo</small></div><span class="chip">Loading</span></header><div class="bc-s"><span>Connecting…</span></div><footer class="bc-f"><button type="button" class="btn ghost sm" data-act="open">Details${I.chev}</button></footer></article>`;
+  if (!M.ea && (M.configured === false || M.full || !M.running)) {
+    const line = M.full ? (M.error || 'This server is full') : M.configured ? (M.error || 'Terminal is not running') : 'Add your MT5 login in Settings';
+    return `<article class="bcard" data-bot="mt5"><header class="bc-h"><span class="mono">M5</span><div class="bc-t"><b>MT5</b><small>V25 (1s) CFD</small></div><span class="chip ${M.full ? 'bad' : ''}">${M.full ? 'Server full' : M.configured ? 'Saved' : 'Set up'}</span></header><div class="bc-s"><span>${esc(line)}</span></div><footer class="bc-f"><button type="button" class="btn ghost sm" data-act="open">${M.configured ? 'Details' : 'Set up'}${I.chev}</button></footer></article>`;
+  }
   const e = M.ea || {}, t = e.today || {}, set = e.settings || {}, rec = e.recovery || {}, run = M.control === 'run', p = e.position;
   const [ct, cc] = window.ATSMT5.chip(M); const wr = t.trades ? Math.round(t.wins / t.trades * 100) + '%' : '—';
   return `<article class="bcard${run ? ' on' : ''}" data-bot="mt5">
@@ -256,12 +261,12 @@ function renderHome() {
   const st = R.st; if (!st) { $('statusTxt').textContent = !paired ? 'Not paired' : R.err ? R.err : 'Connecting…'; $('statusLine').className = 'status-line' + (R.err ? ' err' : ''); return; }
   const bots = allBots(st), real = isReal(st), M = window.ATSMT5 && window.ATSMT5.data();
   const todayAll = bots.reduce((a, x) => a + (+(x.day && x.day.pnl) || 0), 0), trades = bots.reduce((a, x) => a + (+(x.day && x.day.trades) || 0), 0);
-  const mt5On = isAdmin() && !!(M && M.control === 'run'); const running = bots.filter(x => x.on).length + (mt5On ? 1 : 0);
+  const mt5On = hasMt5Ui() && !!(M && M.control === 'run'); const running = bots.filter(x => x.on).length + (mt5On ? 1 : 0);
   const sum = `<div class="sm"><span class="eyebrow">Balance</span><b>${money(st.account.balance)}</b><small>${real ? 'Real' : 'Demo'} · ${esc(st.account.prefix || '')}</small></div>
     <div class="sm"><span class="eyebrow">Today</span><b class="${cls(todayAll)}">${money(todayAll, true)}</b><small>${trades} trade${trades === 1 ? '' : 's'} · Deriv bots</small></div>
     <div class="sm"><span class="eyebrow">Running</span><b>${running}<em>/6</em></b><small>${M && M.ea && M.ea.today ? 'MT5 ' + money(M.ea.today.pnl || 0, true) : 'bots'}</small></div>`;
   if ($('summary').innerHTML !== sum) $('summary').innerHTML = sum;
-  const html = bots.map(x => cardHtml(x, real)).join('') + (isAdmin() ? mt5CardHtml() : '');
+  const html = bots.map(x => cardHtml(x, real)).join('') + (hasMt5Ui() ? mt5CardHtml() : '');
   if (html !== lastCards) { lastCards = html; $('bots').innerHTML = html;
     $('bots').querySelectorAll('.bcard').forEach(c => { const id = c.dataset.bot;
       c.querySelector('[data-act=open]').onclick = () => id === 'mt5' ? go('mt5') : go('bot', id);
@@ -505,13 +510,29 @@ $('exportBtn').onclick = () => { const rows = histRows().slice().reverse(); cons
 
 /* ---------- settings ---------- */
 let gForm = null, setSig = '';
+
+function mt5SettingsHtml(st) {
+  const c = (st && st.mt5c) || {}, admin = st.me && st.me.role === 'admin';
+  const saved = !!(st.me && st.me.flags && st.me.flags.mt5) || !!c.configured;
+  if (admin) return `<section class="card"><div class="card-h"><h3>MT5 connection</h3></div>
+      <div class="row"><div class="l"><b>Already on the server</b><small>Your terminal and EA stay on this machine</small></div><button type="button" class="link" id="openMt5">Open</button></div></section>`;
+  return `<section class="card" id="mt5ConnCard"><div class="card-h"><h3>MT5 connection</h3></div>
+      <p class="muted">Your own MetaTrader 5 login. Saved encrypted on the server and never shown again.</p>
+      ${saved ? '<div class="row"><div class="l"><b>Login saved</b><small>Password is stored encrypted and is never shown</small></div></div>' : ''}
+      ${c.full ? `<div class="notice bad"><span>${esc(c.error || 'This server is full')}</span></div>` : ''}
+      <input type="text" id="mt5Server" class="field" placeholder="Server (for example Deriv-Demo)" autocomplete="off" spellcheck="false">
+      <input type="text" id="mt5Login" class="field" placeholder="Login number" inputmode="numeric" autocomplete="off">
+      <input type="password" id="mt5Password" class="field" placeholder="${saved ? 'Password saved · paste to replace' : 'Password'}" autocomplete="new-password">
+      <button type="button" class="btn primary block" id="mt5SaveConn">Save MT5 login</button>
+      <p class="err-txt" id="mt5ConnErr"></p></section>`;
+}
 function renderSettings() { const st = R.st, el = $('setBody');
   if (!st) { if (setSig !== 'none') { setSig = 'none'; if (gForm) { gForm.destroy(); gForm = null; } el.innerHTML = '<div class="card"><p class="muted">Connect your server first.</p></div>'; } return; }
   const real = st.real, rl = isReal(st), pref = themePref(), anyOn = allBots(st).some(x => x.on);
-  const sig = [rl, capOn(real), anyOn, pref, st.me && st.me.role, st.me && st.me.flags && st.me.flags.demo, st.me && st.me.flags && st.me.flags.real].join('|');
+  const sig = [rl, capOn(real), anyOn, pref, st.me && st.me.role, st.me && st.me.flags && st.me.flags.demo, st.me && st.me.flags && st.me.flags.real, st.me && st.me.flags && st.me.flags.mt5, st.mt5c && st.mt5c.full, st.mt5c && st.mt5c.configured].join('|');
   if (sig !== setSig) { setSig = sig; if (gForm) { gForm.destroy(); gForm = null; }
     el.innerHTML = `
-    <section class="card"><div class="card-h"><h3>Bots</h3></div>${BOTS.map(b => `<button type="button" class="row link-row" data-bot="${b.id}"><div class="l"><b>${esc(b.name)}</b><small data-sub="${b.id}"></small></div>${I.chev}</button>`).join('')}${isAdmin() ? `<button type="button" class="row link-row" data-go2="mt5"><div class="l"><b>MT5</b><small>Expert advisor</small></div>${I.chev}</button>` : ''}</section>
+    <section class="card"><div class="card-h"><h3>Bots</h3></div>${BOTS.map(b => `<button type="button" class="row link-row" data-bot="${b.id}"><div class="l"><b>${esc(b.name)}</b><small data-sub="${b.id}"></small></div>${I.chev}</button>`).join('')}<button type="button" class="row link-row" data-go2="mt5"><div class="l"><b>MT5</b><small>Expert advisor</small></div>${I.chev}</button></section>
     <section class="card"><div class="card-h"><h3>Account</h3></div><div class="row"><div class="l"><b>${rl ? 'Real account' : 'Demo account'}</b><small id="setAcct"></small></div><button type="button" class="link" id="openAcct">Switch</button></div></section>
     <section class="card"><div class="card-h"><h3>Real money</h3></div>
       <div class="row"><div class="l"><b>Lifetime loss cap</b><small id="capTxt"></small></div><label class="switch"><input type="checkbox" id="capOn"${capOn(real) ? ' checked' : ''}><span></span></label></div>
@@ -532,6 +553,7 @@ function renderSettings() { const st = R.st, el = $('setBody');
       <button type="button" class="btn primary block" id="tokSave">Save tokens</button>
       <p class="err-txt" id="tokErr"></p>`}
     </section>
+    ${mt5SettingsHtml(st)}
     <section class="card"><div class="card-h"><h3>Server</h3></div><div class="row"><div class="l"><b>Signed in</b><small>${esc((st.me && st.me.name) || R.url().replace('https://', ''))}</small></div><button type="button" class="link dn" id="forgetKey">Sign out</button></div></section>
     <p class="muted small center">ATS app v${APP_VER}</p>`;
     const q = id => el.querySelector('#' + id); if (window.ATSPush) window.ATSPush.mount(q('notifSlot'));
@@ -545,6 +567,18 @@ function renderSettings() { const st = R.st, el = $('setBody');
       R.realCap(v, up).then(() => toast({ level: 'info', title: 'Lifetime cap set', text: money(v) }), errToast); };
     q('forgetKey').onclick = async () => { if (await ask({ title: 'Sign out?', text: 'You will need your password to sign in again on this device.', ok: 'Sign out', danger: true })) { R.forget(); go('home'); } };
     if (q('openUsers')) q('openUsers').onclick = () => go('users');
+    if (q('openMt5')) q('openMt5').onclick = () => go('mt5');
+    if (q('mt5SaveConn')) q('mt5SaveConn').onclick = async () => {
+      const err = q('mt5ConnErr'); if (err) err.textContent = '';
+      const server = (q('mt5Server').value || '').trim(), login = (q('mt5Login').value || '').trim(), password = (q('mt5Password').value || '').trim();
+      if (!server || !login || !password) { if (err) err.textContent = 'Enter the server, login and password'; return; }
+      try {
+        const d = await R.saveMt5({ login, server, password });
+        q('mt5Server').value = ''; q('mt5Login').value = ''; q('mt5Password').value = '';
+        toast({ level: d.full ? 'info' : 'win', title: d.full ? 'Login saved' : 'MT5 login saved', text: d.full ? (d.error || '') : (d.started ? 'Your terminal is starting' : '') });
+        setSig = ''; renderSettings();
+      } catch (e) { if (err) err.textContent = e.message; }
+    };
     if (q('tokSave')) q('tokSave').onclick = async () => {
       const err = q('tokErr'); err.textContent = '';
       const demo = (q('tokDemo').value || '').trim(), real = (q('tokReal').value || '').trim(), app = (q('tokApp').value || '').trim();

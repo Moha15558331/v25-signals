@@ -48,6 +48,7 @@ const R = {
   adminInvite(name) { return this.act('POST', '/api/admin/invites', { name }); },
   adminDisable(id, off) { return this.act('POST', '/api/admin/users/' + (off ? 'disable' : 'enable'), { id }); },
   saveTokens(body) { return this.act('POST', '/api/account/tokens', body); },
+  saveMt5(body) { return this.act('POST', '/api/account/mt5', body); },
   async refresh(full) {
     if (!this.hasKey()) { this.changed(); return; }
     try { const s = await this.api('GET', '/api/status'); this.st = s; this.err = null; this.lastOk = Date.now();

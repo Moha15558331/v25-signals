@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.21.0';
+const APP_VER = '4.22.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -166,7 +166,8 @@ const RF_SCHEMA = [
     { k: 'td_note', label: 'Top-down zones', type: 'note', hint: 'Trades only when price is at a strong zone edge with a 1-minute confirmation; otherwise it skips. Any minute, contract runs for the candle. Backtest: 15 minutes was best, 55.7% on unseen data (break-even 53.2% at $0.35), about 4 trades a day. Not a proven edge.', show: d => d.direction === 'topdown' && (d.td_setup || 'zones') === 'zones' },
     { k: 'td_note2', label: 'Setup', type: 'note', hint: 'H1 break, pullback into the flipped zone, 1-minute rejection. Backtest Jul–Nov: about 50% at every expiry (break-even 53.2%). Not a proven edge.', show: d => d.direction === 'topdown' && (d.td_setup === 'retest' || d.td_setup === 'fib') },
     { k: 'td_note3', label: 'Setup', type: 'note', hint: 'Points for zone, flip, break, sweep and candle pattern; trades at 4+ after a 1-minute rejection. Backtest on unseen data: 51.5% at 15 minutes (break-even 53.2%). Not a proven edge.', show: d => d.direction === 'topdown' && d.td_setup === 'score' }] },
-  { title: 'Martingale', fields: [sw('martingale', 'Martingale'), nm('mg_factor', 'Factor', '×', '', mgOn), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn)] },
+  { title: 'Martingale', fields: [sw('martingale', 'Martingale', 'Off is a flat stake'), nm('mg_factor', 'Factor', '×', '', mgOn), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn), sw('smart_mg', 'Smart Martingale', 'Size or skip a recovery so it cannot pass the daily stop', mgOn)] },
+  { title: 'Pacing', fields: [sw('patient', 'Patient mode', 'Space trades through the day'), it('warmup_min', 'Warm-up after 00:00', 'min', 'Wait after midnight before the first trade', d => d.patient !== false), it('gap_min', 'Gap between trades', 'min', 'Minimum wait after a win', d => d.patient !== false), it('per_hour', 'Max trades per hour', '', 'Then it waits', d => d.patient !== false), it('pause_loss', 'Pause after a loss', 's', 'Wait before the next trade', d => d.patient !== false)] },
   { title: 'Sessions', fields: [sw('ses_on', 'Sessions'), it('ses_count', 'Sessions per day', '', '', sesOn), nm('ses_tp', 'Session target', '$', '', sesOn), nm('ses_sl', 'Session stop', '$', '', sesOn), it('ses_pause', 'Pause between', 's', '', sesOn)] },
   { title: 'Daily limits', fields: [nm('day_tp', 'Daily lock', '$'), nm('day_sl', 'Daily stop', '$'), it('max_consec_losses', 'Max losses in a row')] },
 ];
@@ -180,7 +181,8 @@ function dgSchema(id) {
   trade.push(sw('signal', 'Use signal'), { k: 'scan', label: 'Signal markets', type: 'sel', opts: [['all', 'All markets'], ['one', 'This market']], show: d => !!d.signal }, it('lookback', 'Ticks to analyze'), it('ticks', 'Duration', 'ticks'), nm('stake', 'Stake', '$'));
   return [
     { title: 'Trade', fields: trade },
-    { title: 'Martingale', fields: [sw('martingale', 'Martingale'), { k: 'mg_mode', label: 'Multiplier', type: 'sel', opts: MG_MODES[id], show: mgOn }, nm('mg_factor', 'Factor', '×', '', d => d.martingale && d.mg_mode === 'fixed'), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn), sw('smart_mg', 'Smart cap', '', mgOn)] },
+    { title: 'Martingale', fields: [sw('martingale', 'Martingale', 'Off is a flat stake'), { k: 'mg_mode', label: 'Multiplier', type: 'sel', opts: MG_MODES[id], show: mgOn }, nm('mg_factor', 'Factor', '×', '', d => d.martingale && d.mg_mode === 'fixed'), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn), sw('smart_mg', 'Smart Martingale', 'Size or skip a recovery so it cannot pass the daily stop', mgOn)] },
+    { title: 'Pacing', fields: [sw('patient', 'Patient mode', 'Space trades through the day'), it('warmup_min', 'Warm-up after 00:00', 'min', 'Wait after midnight before the first trade', d => d.patient !== false), it('gap_min', 'Gap between trades', 'min', 'Minimum wait after a win', d => d.patient !== false), it('per_hour', 'Max trades per hour', '', 'Then it waits', d => d.patient !== false), it('pause_loss', 'Pause after a loss', 's', 'Wait before the next trade', d => d.patient !== false)] },
     { title: 'Sessions', fields: [sw('ses_on', 'Sessions'), it('ses_count', 'Sessions per day', '', '', sesOn), nm('ses_tp', 'Session target', '$', '', sesOn), nm('ses_sl', 'Session stop', '$', '', sesOn), it('ses_pause', 'Pause between', 's', '', sesOn)] },
     { title: 'Daily limits', fields: [nm('day_tp', 'Daily lock', '$'), nm('day_sl', 'Daily stop', '$'), it('max_consec_losses', 'Max losses in a row'), nm('gap', 'Gap between trades', 's')] },
   ];
@@ -368,14 +370,14 @@ function renderBot() { const st = R.st; if (!st) return; const x = botOf(st, bot
 const AB_ICON = '<svg viewBox="0 0 24 24"><path d="M13 2.5L4.5 13.5H11l-1 8 8.5-11H12z" fill="currentColor" stroke="none"/></svg>';
 const AB_RESET = '<svg viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.4-5.7M4 4v4.5h4.5"/></svg>';
 const abLock = x => (x.ab && x.ab.lock) || null;
-function abChip(x) { const o = x.outcome; return x.on ? (x.running ? ['live', 'Running'] : ['warn', 'Stopping']) : o === 'target' ? ['ok', 'Target hit'] : o === 'stopped' ? ['bad', 'Stopped'] : o === 'halted' ? ['bad', 'Halted'] : ['', 'Ready']; }
+function abChip(x) { const o = x.outcome, lk = abLock(x); if (lk) return lk.state === 'target' ? ['ok', 'Target hit'] : ['bad', 'Stopped']; return x.on ? (x.running ? ['live', 'Running'] : ['warn', 'Stopping']) : o === 'target' ? ['ok', 'Target hit'] : o === 'stopped' ? ['bad', 'Stopped'] : o === 'halted' ? ['bad', 'Halted'] : ['', 'Ready']; }
 function abStatus(x) { const td = x.ab.today || {}, lk = abLock(x);
-  if (x.on && !x.running) return 'Finishing the last trade…';
-  if (x.running) return x.pos ? `Trade open · ${money(x.pos.stake)}` : /^(Analysing|Waiting|Cooling)/.test(x.msg || '') ? x.msg : td.trades ? `Trading · ${td.trades} trade${td.trades === 1 ? '' : 's'} today` : 'Reading the market…';
   if (lk) return lk.text;
+  if (x.on && !x.running) return 'Finishing the last trade…';
+  if (x.running) return x.pos ? `Trade open · ${money(x.pos.stake)}` : /^(Analysing|Waiting|Cooling|Warming)/.test(x.msg || '') ? x.msg : td.trades ? `Trading · ${td.trades} trade${td.trades === 1 ? '' : 's'} today` : 'Reading the market…';
   if (x.outcome === 'halted') return x.msg || 'Stopped';
   return 'Ready'; }
-const abAnalysing = x => !!(x.running && !x.pos && /^(Analysing|Waiting|Cooling)/.test(x.msg || ''));
+const abAnalysing = x => !!(x.running && !x.pos && /^(Analysing|Waiting|Cooling|Warming)/.test(x.msg || ''));
 function abBar(pnl, target) { const t = Math.max(0.01, +target || 1), w = Math.max(0, Math.min(1, (+pnl || 0) / t)) * 100;
   return `<div class="ab-bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(w)}"><i style="width:${w.toFixed(1)}%"></i></div>`; }
 const abWr = td => td.trades ? Math.round(td.wins / td.trades * 100) + '%' : '—';
@@ -393,14 +395,17 @@ const AB_SCHEMA = [{ title: 'Parameters', fields: [
   nm('target', 'Daily target', '$', 'Locks for the day when today is up this much'),
   it('max_consec_losses', 'Stop after', 'losses', 'Losses in a row that count as one stop'),
   it('max_stops', 'Stops per day', '', 'Stop events that lock the day'),
+  sw('martingale', 'Martingale', 'Off is a flat stake'),
+  sw('smart_mg', 'Smart Martingale', 'Size or skip a recovery so it cannot pass the daily stop', d => d.martingale !== false),
   it('cooloff_min', 'Cool-off after a stop', 'min', 'Wait before trading again'),
   it('pause_win', 'Pause after win', 's', 'Wait, then a fresh read'),
   it('pause_loss', 'Pause after loss', 's', 'Wait before the recovery trade'),
   sw('patient', 'Patient mode', 'Space trades through the day'),
+  it('warmup_min', 'Warm-up after 00:00', 'min', 'Wait after midnight before the first trade', d => d.patient !== false),
   it('gap_min', 'Gap between trades', 'min', 'Minimum wait after a win', d => d.patient !== false),
   it('per_hour', 'Max trades per hour', '', 'Then it waits', d => d.patient !== false)] }];
 let abForm = null, abOpen = false, lastAbHero = '', lastAbRec = '';
-const abVals = p => ({ stake: p.stake, payout_pct: p.payout_pct != null ? p.payout_pct : 25, target: p.target, max_consec_losses: p.max_consec_losses, pause_win: p.pause_win != null ? p.pause_win : 5, pause_loss: p.pause_loss != null ? p.pause_loss : 30, patient: p.patient !== false, gap_min: p.gap_min != null ? p.gap_min : 3, per_hour: p.per_hour != null ? p.per_hour : 6, cooloff_min: p.cooloff_min != null ? p.cooloff_min : 60, max_stops: p.max_stops != null ? p.max_stops : 1 });
+const abVals = p => ({ stake: p.stake, payout_pct: p.payout_pct != null ? p.payout_pct : 25, target: p.target, max_consec_losses: p.max_consec_losses, martingale: p.martingale !== false, smart_mg: p.smart_mg !== false, pause_win: p.pause_win != null ? p.pause_win : 5, pause_loss: p.pause_loss != null ? p.pause_loss : 30, patient: p.patient !== false, warmup_min: p.warmup_min != null ? p.warmup_min : 10, gap_min: p.gap_min != null ? p.gap_min : 3, per_hour: p.per_hour != null ? p.per_hour : 6, cooloff_min: p.cooloff_min != null ? p.cooloff_min : 60, max_stops: p.max_stops != null ? p.max_stops : 1 });
 let abRec = null; // v4.17: recovery sized by the server from live quotes (stakes, factor, worst)
 function abWorst(d) { const s = +d.stake, pct = +d.payout_pct, n = Math.round(+d.max_consec_losses), k = Math.max(1, Math.round(+d.max_stops || 1)); if (!(s > 0 && pct > 0 && n >= 1 && n <= 20)) return '';
   const r = abRec, same = r && r.stakes && r.stakes[0] === s && r.stakes.length === n;

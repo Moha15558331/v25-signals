@@ -192,7 +192,7 @@ function dgSchema(id) {
 /* ---------- navigation ---------- */
 let view = 'home', botId = 'ats';
 const VIEWS = ['home', 'bot', 'ab', 'mt5', 'stats', 'history', 'settings', 'users'];
-function go(v, arg) { if (v === 'bot' && arg) botId = arg; if (v === 'bot' && botId === 'atsbot') v = 'ab'; else if (v === 'ab') botId = 'atsbot'; view = v; if (window.ATSMT5) window.ATSMT5.show(v === 'mt5', v === 'home');
+function go(v, arg) { if (v === 'bot' && arg) botId = arg; if (v === 'bot' && botId === 'atsbot') v = 'ab'; else if (v === 'ab') botId = 'atsbot'; if (v === 'mt5' && R.st && R.st.me && R.st.me.role !== 'admin') v = 'home'; view = v; if (window.ATSMT5) window.ATSMT5.show(v === 'mt5', v === 'home');
   for (const x of VIEWS) { const el = $('v-' + x); if (el) el.hidden = x !== v; }
   const tab = v === 'bot' || v === 'ab' ? 'home' : v; document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.go === tab));
   R.wantHist = v === 'history' ? histBot : v === 'bot' || v === 'ab' ? null : R.wantHist;
@@ -202,6 +202,8 @@ document.querySelectorAll('[data-go]').forEach(b => b.onclick = () => go(b.datas
 
 /* ---------- header ---------- */
 function renderHeader() { const st = R.st; const anyOn = st && allBots(st).some(x => x.on);
+  const mt5Tab = document.querySelector('#tabbar [data-go=mt5]'); if (mt5Tab) mt5Tab.hidden = !!(st && st.me && st.me.role && st.me.role !== 'admin');
+
   const badge = $('modeBadge'); badge.className = 'badge ' + (!st ? 'off' : isReal(st) ? 'real' : '');
   $('modeTxt').textContent = !st ? (R.hasKey() ? (R.err ? 'OFFLINE' : 'CONNECTING') : 'NOT PAIRED') : isReal(st) ? 'REAL' : 'DEMO';
   $('liveDot').className = 'live-dot' + (anyOn ? ' on' : '');
@@ -214,6 +216,7 @@ function renderHeader() { const st = R.st; const anyOn = st && allBots(st).some(
 
 /* ---------- home ---------- */
 const NAME_KEY = 'ats.name';
+const isAdmin = () => !!(R.st && R.st.me && R.st.me.role === 'admin');
 function accountName() { const me = R.st && R.st.me; if (me && me.name) return me.name; try { const n = localStorage.getItem(NAME_KEY); if (n) return n; } catch (e) { } return 'Trader'; }
 function editName() { const cur = accountName();
   sheet(`<h2>Your name</h2><p>Shown on the welcome screen. Stored only on this device.</p><input class="field" id="nmIn" maxlength="40" autocomplete="off" value="${esc(cur === 'Trader' ? '' : cur)}" placeholder="Name"><div class="btns"><button type="button" class="btn primary block" id="nmOk">Save</button><button type="button" class="btn ghost block" id="nmNo">Cancel</button></div>`, s => {
@@ -253,12 +256,12 @@ function renderHome() {
   const st = R.st; if (!st) { $('statusTxt').textContent = !paired ? 'Not paired' : R.err ? R.err : 'Connecting…'; $('statusLine').className = 'status-line' + (R.err ? ' err' : ''); return; }
   const bots = allBots(st), real = isReal(st), M = window.ATSMT5 && window.ATSMT5.data();
   const todayAll = bots.reduce((a, x) => a + (+(x.day && x.day.pnl) || 0), 0), trades = bots.reduce((a, x) => a + (+(x.day && x.day.trades) || 0), 0);
-  const mt5On = !!(M && M.control === 'run'); const running = bots.filter(x => x.on).length + (mt5On ? 1 : 0);
+  const mt5On = isAdmin() && !!(M && M.control === 'run'); const running = bots.filter(x => x.on).length + (mt5On ? 1 : 0);
   const sum = `<div class="sm"><span class="eyebrow">Balance</span><b>${money(st.account.balance)}</b><small>${real ? 'Real' : 'Demo'} · ${esc(st.account.prefix || '')}</small></div>
     <div class="sm"><span class="eyebrow">Today</span><b class="${cls(todayAll)}">${money(todayAll, true)}</b><small>${trades} trade${trades === 1 ? '' : 's'} · Deriv bots</small></div>
     <div class="sm"><span class="eyebrow">Running</span><b>${running}<em>/6</em></b><small>${M && M.ea && M.ea.today ? 'MT5 ' + money(M.ea.today.pnl || 0, true) : 'bots'}</small></div>`;
   if ($('summary').innerHTML !== sum) $('summary').innerHTML = sum;
-  const html = bots.map(x => cardHtml(x, real)).join('') + mt5CardHtml();
+  const html = bots.map(x => cardHtml(x, real)).join('') + (isAdmin() ? mt5CardHtml() : '');
   if (html !== lastCards) { lastCards = html; $('bots').innerHTML = html;
     $('bots').querySelectorAll('.bcard').forEach(c => { const id = c.dataset.bot;
       c.querySelector('[data-act=open]').onclick = () => id === 'mt5' ? go('mt5') : go('bot', id);
@@ -508,7 +511,7 @@ function renderSettings() { const st = R.st, el = $('setBody');
   const sig = [rl, capOn(real), anyOn, pref, st.me && st.me.role, st.me && st.me.flags && st.me.flags.demo, st.me && st.me.flags && st.me.flags.real].join('|');
   if (sig !== setSig) { setSig = sig; if (gForm) { gForm.destroy(); gForm = null; }
     el.innerHTML = `
-    <section class="card"><div class="card-h"><h3>Bots</h3></div>${BOTS.map(b => `<button type="button" class="row link-row" data-bot="${b.id}"><div class="l"><b>${esc(b.name)}</b><small data-sub="${b.id}"></small></div>${I.chev}</button>`).join('')}<button type="button" class="row link-row" data-go2="mt5"><div class="l"><b>MT5</b><small>Expert advisor</small></div>${I.chev}</button></section>
+    <section class="card"><div class="card-h"><h3>Bots</h3></div>${BOTS.map(b => `<button type="button" class="row link-row" data-bot="${b.id}"><div class="l"><b>${esc(b.name)}</b><small data-sub="${b.id}"></small></div>${I.chev}</button>`).join('')}${isAdmin() ? `<button type="button" class="row link-row" data-go2="mt5"><div class="l"><b>MT5</b><small>Expert advisor</small></div>${I.chev}</button>` : ''}</section>
     <section class="card"><div class="card-h"><h3>Account</h3></div><div class="row"><div class="l"><b>${rl ? 'Real account' : 'Demo account'}</b><small id="setAcct"></small></div><button type="button" class="link" id="openAcct">Switch</button></div></section>
     <section class="card"><div class="card-h"><h3>Real money</h3></div>
       <div class="row"><div class="l"><b>Lifetime loss cap</b><small id="capTxt"></small></div><label class="switch"><input type="checkbox" id="capOn"${capOn(real) ? ' checked' : ''}><span></span></label></div>
@@ -532,7 +535,7 @@ function renderSettings() { const st = R.st, el = $('setBody');
     <section class="card"><div class="card-h"><h3>Server</h3></div><div class="row"><div class="l"><b>Signed in</b><small>${esc((st.me && st.me.name) || R.url().replace('https://', ''))}</small></div><button type="button" class="link dn" id="forgetKey">Sign out</button></div></section>
     <p class="muted small center">ATS app v${APP_VER}</p>`;
     const q = id => el.querySelector('#' + id); if (window.ATSPush) window.ATSPush.mount(q('notifSlot'));
-    el.querySelectorAll('[data-bot]').forEach(b => b.onclick = () => go('bot', b.dataset.bot)); el.querySelector('[data-go2]').onclick = () => go('mt5');
+    el.querySelectorAll('[data-bot]').forEach(b => b.onclick = () => go('bot', b.dataset.bot)); const g2 = el.querySelector('[data-go2]'); if (g2) g2.onclick = () => go('mt5');
     el.querySelectorAll('#themeSeg button').forEach(b => b.onclick = () => setTheme(b.dataset.t));
     q('openAcct').onclick = openAccount;
     if (q('resetDemo')) q('resetDemo').onclick = resetDemo; if (q('resetTodaySet')) q('resetTodaySet').onclick = resetToday; if (q('clearHist')) q('clearHist').onclick = clearHistory;

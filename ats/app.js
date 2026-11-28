@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.22.0';
+const APP_VER = '4.23.0';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -24,6 +24,7 @@ const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&am
 const money = (x, sign) => x == null || isNaN(x) ? '—' : (sign && x > 0 ? '+' : x < 0 ? '−' : '') + '$' + Math.abs(+x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = (x, d = 1) => x == null ? '—' : (x * 100).toFixed(d) + '%';
 const cls = x => x > 0 ? 'up' : x < 0 ? 'dn' : '';
+const noZone = s => String(s || '').replace(/midnight Bahrain/gi, '00:00').replace(/\bat midnight\b/gi, 'at 00:00').replace(/\buntil midnight\b/gi, 'until 00:00').replace(/\bBahrain\b/gi, '').replace(/\s+-\s+resets at/gi, ' · resets at').replace(/\s{2,}/g, ' ').replace(/\s+·/g, ' ·').trim();
 const fmtT = (ep, withDay) => new Intl.DateTimeFormat('en-GB', Object.assign({ timeZone: 'Asia/Bahrain', hour: '2-digit', minute: '2-digit', second: withDay ? undefined : '2-digit', hour12: false }, withDay ? { day: 'numeric', month: 'short' } : {})).format(new Date(ep * 1000));
 const hm = ep => fmtT(ep).slice(0, 5);
 /** e.g. 'Running since Wed 25 Nov, 09:29' — no time-zone name. */
@@ -167,7 +168,7 @@ const RF_SCHEMA = [
     { k: 'td_note2', label: 'Setup', type: 'note', hint: 'H1 break, pullback into the flipped zone, 1-minute rejection. Backtest Jul–Nov: about 50% at every expiry (break-even 53.2%). Not a proven edge.', show: d => d.direction === 'topdown' && (d.td_setup === 'retest' || d.td_setup === 'fib') },
     { k: 'td_note3', label: 'Setup', type: 'note', hint: 'Points for zone, flip, break, sweep and candle pattern; trades at 4+ after a 1-minute rejection. Backtest on unseen data: 51.5% at 15 minutes (break-even 53.2%). Not a proven edge.', show: d => d.direction === 'topdown' && d.td_setup === 'score' }] },
   { title: 'Martingale', fields: [sw('martingale', 'Martingale', 'Off is a flat stake'), nm('mg_factor', 'Factor', '×', '', mgOn), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn), sw('smart_mg', 'Smart Martingale', 'Size or skip a recovery so it cannot pass the daily stop', mgOn)] },
-  { title: 'Pacing', fields: [sw('patient', 'Patient mode', 'Space trades through the day'), it('warmup_min', 'Warm-up after 00:00', 'min', 'Wait after midnight before the first trade', d => d.patient !== false), it('gap_min', 'Gap between trades', 'min', 'Minimum wait after a win', d => d.patient !== false), it('per_hour', 'Max trades per hour', '', 'Then it waits', d => d.patient !== false), it('pause_loss', 'Pause after a loss', 's', 'Wait before the next trade', d => d.patient !== false)] },
+  { title: 'Pacing', fields: [sw('patient', 'Patient mode', 'Space trades through the day'), it('warmup_min', 'Warm-up after 00:00', 'min', 'Wait after 00:00 before the first trade', d => d.patient !== false), it('gap_min', 'Gap between trades', 'min', 'Minimum wait after a win', d => d.patient !== false), it('per_hour', 'Max trades per hour', '', 'Then it waits', d => d.patient !== false), it('pause_loss', 'Pause after a loss', 's', 'Wait before the next trade', d => d.patient !== false)] },
   { title: 'Sessions', fields: [sw('ses_on', 'Sessions'), it('ses_count', 'Sessions per day', '', '', sesOn), nm('ses_tp', 'Session target', '$', '', sesOn), nm('ses_sl', 'Session stop', '$', '', sesOn), it('ses_pause', 'Pause between', 's', '', sesOn)] },
   { title: 'Daily limits', fields: [nm('day_tp', 'Daily lock', '$'), nm('day_sl', 'Daily stop', '$'), it('max_consec_losses', 'Max losses in a row')] },
 ];
@@ -182,7 +183,7 @@ function dgSchema(id) {
   return [
     { title: 'Trade', fields: trade },
     { title: 'Martingale', fields: [sw('martingale', 'Martingale', 'Off is a flat stake'), { k: 'mg_mode', label: 'Multiplier', type: 'sel', opts: MG_MODES[id], show: mgOn }, nm('mg_factor', 'Factor', '×', '', d => d.martingale && d.mg_mode === 'fixed'), it('mg_max_steps', 'Steps', '', '', mgOn), sw('mg_reset_win', 'Reset on a win', '', mgOn), sw('smart_mg', 'Smart Martingale', 'Size or skip a recovery so it cannot pass the daily stop', mgOn)] },
-    { title: 'Pacing', fields: [sw('patient', 'Patient mode', 'Space trades through the day'), it('warmup_min', 'Warm-up after 00:00', 'min', 'Wait after midnight before the first trade', d => d.patient !== false), it('gap_min', 'Gap between trades', 'min', 'Minimum wait after a win', d => d.patient !== false), it('per_hour', 'Max trades per hour', '', 'Then it waits', d => d.patient !== false), it('pause_loss', 'Pause after a loss', 's', 'Wait before the next trade', d => d.patient !== false)] },
+    { title: 'Pacing', fields: [sw('patient', 'Patient mode', 'Space trades through the day'), it('warmup_min', 'Warm-up after 00:00', 'min', 'Wait after 00:00 before the first trade', d => d.patient !== false), it('gap_min', 'Gap between trades', 'min', 'Minimum wait after a win', d => d.patient !== false), it('per_hour', 'Max trades per hour', '', 'Then it waits', d => d.patient !== false), it('pause_loss', 'Pause after a loss', 's', 'Wait before the next trade', d => d.patient !== false)] },
     { title: 'Sessions', fields: [sw('ses_on', 'Sessions'), it('ses_count', 'Sessions per day', '', '', sesOn), nm('ses_tp', 'Session target', '$', '', sesOn), nm('ses_sl', 'Session stop', '$', '', sesOn), it('ses_pause', 'Pause between', 's', '', sesOn)] },
     { title: 'Daily limits', fields: [nm('day_tp', 'Daily lock', '$'), nm('day_sl', 'Daily stop', '$'), it('max_consec_losses', 'Max losses in a row'), nm('gap', 'Gap between trades', 's')] },
   ];
@@ -190,7 +191,7 @@ function dgSchema(id) {
 
 /* ---------- navigation ---------- */
 let view = 'home', botId = 'ats';
-const VIEWS = ['home', 'bot', 'ab', 'mt5', 'stats', 'history', 'settings'];
+const VIEWS = ['home', 'bot', 'ab', 'mt5', 'stats', 'history', 'settings', 'users'];
 function go(v, arg) { if (v === 'bot' && arg) botId = arg; if (v === 'bot' && botId === 'atsbot') v = 'ab'; else if (v === 'ab') botId = 'atsbot'; view = v; if (window.ATSMT5) window.ATSMT5.show(v === 'mt5', v === 'home');
   for (const x of VIEWS) { const el = $('v-' + x); if (el) el.hidden = x !== v; }
   const tab = v === 'bot' || v === 'ab' ? 'home' : v; document.querySelectorAll('#tabbar button').forEach(b => b.classList.toggle('on', b.dataset.go === tab));
@@ -213,7 +214,7 @@ function renderHeader() { const st = R.st; const anyOn = st && allBots(st).some(
 
 /* ---------- home ---------- */
 const NAME_KEY = 'ats.name';
-function accountName() { try { const n = localStorage.getItem(NAME_KEY); if (n) return n; } catch (e) { } return 'Trader'; }
+function accountName() { const me = R.st && R.st.me; if (me && me.name) return me.name; try { const n = localStorage.getItem(NAME_KEY); if (n) return n; } catch (e) { } return 'Trader'; }
 function editName() { const cur = accountName();
   sheet(`<h2>Your name</h2><p>Shown on the welcome screen. Stored only on this device.</p><input class="field" id="nmIn" maxlength="40" autocomplete="off" value="${esc(cur === 'Trader' ? '' : cur)}" placeholder="Name"><div class="btns"><button type="button" class="btn primary block" id="nmOk">Save</button><button type="button" class="btn ghost block" id="nmNo">Cancel</button></div>`, s => {
     const i = s.querySelector('#nmIn'); setTimeout(() => i.focus(), 50);
@@ -226,7 +227,7 @@ function dayBar(pnl, stop, lock) { stop = Math.max(0.01, +stop || 1); lock = Mat
   return `<div class="dbar" title="Daily stop −$${stop.toFixed(2)} · lock +$${lock.toFixed(2)}"><i class="z" style="left:${z}%"></i><i class="f ${pn >= 0 ? 'p' : 'n'}" style="left:${l}%;width:${w}%"></i></div><div class="dbar-l"><span>−$${stop.toFixed(2)}</span><span>+$${lock.toFixed(2)}</span></div>`; }
 function sesDots(ss, ds) { if (!ss || !ss.on || !ss.count) return ''; const log = ss.log || [];
   return `<div class="sdots" title="Sessions">${Array.from({ length: ss.count }, (_, i) => { const lg = log[i]; const c = lg ? (lg.pnl > 0 ? 'w' : 'l') : i + 1 === ss.current && ds === 'trading' ? 'c' : ''; return `<i class="${c}"></i>`; }).join('')}<span>${Math.min(ss.done, ss.count)}/${ss.count}</span></div>`; }
-function botLine(x) { if (!x.on) return x.halt ? 'Halted: ' + x.halt : x.state === 'halted' ? (x.msg || 'Halted') : 'Ready'; if (x.pos) return `${sideLabel(x.pos.type, x.pos.barrier) || (x.pos.dir === 'up' ? 'Rise' : 'Fall')} open · ${money(x.pos.stake)}`; return x.msg || 'Watching'; }
+function botLine(x) { if (!x.on) return x.halt ? 'Halted: ' + noZone(x.halt) : x.state === 'halted' ? noZone(x.msg || 'Halted') : 'Ready'; if (x.pos) return `${sideLabel(x.pos.type, x.pos.barrier) || (x.pos.dir === 'up' ? 'Rise' : 'Fall')} open · ${money(x.pos.stake)}`; return noZone(x.msg || 'Watching'); }
 function cardHtml(x, real) { if (x.id === 'atsbot') return abCardHtml(x, real); const [cc, ct] = stateChip(x); const d = x.day || {}; const demoOnly = real && x.id !== 'ats';
   const wr = d.trades ? Math.round((d.wins || 0) / d.trades * 100) + '%' : '—';
   return `<article class="bcard${x.on ? ' on' : ''}" data-bot="${x.id}">
@@ -243,7 +244,7 @@ function mt5CardHtml() { const M = window.ATSMT5 && window.ATSMT5.data(); if (!M
     <header class="bc-h"><span class="mono">M5</span><div class="bc-t"><b>MT5</b><small>${set.reverse ? 'Reversed · ' : ''}${esc(set.lots)} lot · V25 (1s) CFD</small></div><span class="chip ${cc}">${esc(ct)}</span></header>
     <div class="bc-m"><div><span class="eyebrow">Today</span><b class="${cls(t.pnl)}">${money(t.pnl || 0, true)}</b></div><div><span class="eyebrow">Trades</span><b>${t.trades || 0}</b></div><div><span class="eyebrow">Win rate</span><b>${wr}</b></div><div><span class="eyebrow">Recovery</span><b>${rec.on ? `${rec.step || 0}/${rec.steps}` : 'Off'}</b></div></div>
     ${dayBar(t.pnl, set.day_sl, set.day_tp)}
-    <div class="bc-s"><span>${esc(p ? `${p.dir === 'up' ? 'Buy' : 'Sell'} ${p.lots} open · ${money(p.profit, true)}` : e.reason || '')}</span></div>
+    <div class="bc-s"><span>${esc(p ? `${p.dir === 'up' ? 'Buy' : 'Sell'} ${p.lots} open · ${money(p.profit, true)}` : noZone(e.reason || ''))}</span></div>
     <footer class="bc-f"><button type="button" class="btn ${run ? 'ghost' : 'primary'} sm" data-act="go"${window.ATSMT5.busy() ? ' disabled' : ''}>${run ? I.stop + 'Stop' : I.play + 'Start'}</button><button type="button" class="btn ghost sm" data-act="open">Details${I.chev}</button></footer></article>`; }
 let lastCards = '';
 function renderHome() {
@@ -401,7 +402,7 @@ const AB_SCHEMA = [{ title: 'Parameters', fields: [
   it('pause_win', 'Pause after win', 's', 'Wait, then a fresh read'),
   it('pause_loss', 'Pause after loss', 's', 'Wait before the recovery trade'),
   sw('patient', 'Patient mode', 'Space trades through the day'),
-  it('warmup_min', 'Warm-up after 00:00', 'min', 'Wait after midnight before the first trade', d => d.patient !== false),
+  it('warmup_min', 'Warm-up after 00:00', 'min', 'Wait after 00:00 before the first trade', d => d.patient !== false),
   it('gap_min', 'Gap between trades', 'min', 'Minimum wait after a win', d => d.patient !== false),
   it('per_hour', 'Max trades per hour', '', 'Then it waits', d => d.patient !== false)] }];
 let abForm = null, abOpen = false, lastAbHero = '', lastAbRec = '';
@@ -504,7 +505,7 @@ let gForm = null, setSig = '';
 function renderSettings() { const st = R.st, el = $('setBody');
   if (!st) { if (setSig !== 'none') { setSig = 'none'; if (gForm) { gForm.destroy(); gForm = null; } el.innerHTML = '<div class="card"><p class="muted">Connect your server first.</p></div>'; } return; }
   const real = st.real, rl = isReal(st), pref = themePref(), anyOn = allBots(st).some(x => x.on);
-  const sig = [rl, capOn(real), anyOn, pref].join('|');
+  const sig = [rl, capOn(real), anyOn, pref, st.me && st.me.role, st.me && st.me.flags && st.me.flags.demo, st.me && st.me.flags && st.me.flags.real].join('|');
   if (sig !== setSig) { setSig = sig; if (gForm) { gForm.destroy(); gForm = null; }
     el.innerHTML = `
     <section class="card"><div class="card-h"><h3>Bots</h3></div>${BOTS.map(b => `<button type="button" class="row link-row" data-bot="${b.id}"><div class="l"><b>${esc(b.name)}</b><small data-sub="${b.id}"></small></div>${I.chev}</button>`).join('')}<button type="button" class="row link-row" data-go2="mt5"><div class="l"><b>MT5</b><small>Expert advisor</small></div>${I.chev}</button></section>
@@ -518,7 +519,17 @@ function renderSettings() { const st = R.st, el = $('setBody');
       <div class="row"><div class="l"><b>Clear history</b>${anyOn ? '<small>Stop all bots first</small>' : ''}</div><button type="button" class="link dn" id="clearHist"${anyOn ? ' disabled' : ''}>Clear</button></div></section>`}
     <div id="notifSlot"></div>
     <section class="card"><div class="card-h"><h3>Appearance</h3></div><div class="seg" id="themeSeg">${['auto', 'light', 'dark'].map(t => `<button type="button" data-t="${t}" class="${pref === t ? 'on' : ''}">${t === 'auto' ? 'Automatic' : t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></section>
-    <section class="card"><div class="card-h"><h3>Server</h3></div><div class="row"><div class="l"><b>Connected</b><small>${esc(R.url().replace('https://', ''))}</small></div><button type="button" class="link dn" id="forgetKey">Unpair</button></div></section>
+    ${st.me && st.me.role === 'admin' ? `<section class="card"><div class="card-h"><h3>Users</h3></div><button type="button" class="row link-row" id="openUsers"><div class="l"><b>Invite friends</b><small>Invite-only accounts, each with their own bots</small></div>${I.chev}</button></section>` : ''}
+    <section class="card"><div class="card-h"><h3>Deriv connection</h3></div>
+      ${st.me && st.me.role === 'admin' ? `<div class="row"><div class="l"><b>${st.me.flags && st.me.flags.demo ? 'Demo connected' : 'Demo'}</b><small>${st.me.flags && st.me.flags.real ? 'Real token is on the server' : 'Tokens stay on the server'}</small></div></div>` : `<div class="row"><div class="l"><b>Demo token</b><small>${st.me && st.me.flags && st.me.flags.demo ? 'Connected' : 'Paste your Deriv demo API token'}</small></div></div>
+      <input type="password" id="tokDemo" class="field" placeholder="${st.me && st.me.flags && st.me.flags.demo ? 'Token saved · paste to replace' : 'Demo API token'}" autocomplete="off" spellcheck="false">
+      <input type="text" id="tokApp" class="field" placeholder="Deriv app ID (optional)" inputmode="numeric" autocomplete="off">
+      <div class="row"><div class="l"><b>Real token</b><small>${st.me && st.me.flags && st.me.flags.real ? 'Connected · you flip Real yourself' : 'Optional. Real stays off until you flip it'}</small></div></div>
+      <input type="password" id="tokReal" class="field" placeholder="${st.me && st.me.flags && st.me.flags.real ? 'Token saved · paste to replace' : 'Real API token'}" autocomplete="off" spellcheck="false">
+      <button type="button" class="btn primary block" id="tokSave">Save tokens</button>
+      <p class="err-txt" id="tokErr"></p>`}
+    </section>
+    <section class="card"><div class="card-h"><h3>Server</h3></div><div class="row"><div class="l"><b>Signed in</b><small>${esc((st.me && st.me.name) || R.url().replace('https://', ''))}</small></div><button type="button" class="link dn" id="forgetKey">Sign out</button></div></section>
     <p class="muted small center">ATS app v${APP_VER}</p>`;
     const q = id => el.querySelector('#' + id); if (window.ATSPush) window.ATSPush.mount(q('notifSlot'));
     el.querySelectorAll('[data-bot]').forEach(b => b.onclick = () => go('bot', b.dataset.bot)); el.querySelector('[data-go2]').onclick = () => go('mt5');
@@ -529,7 +540,15 @@ function renderSettings() { const st = R.st, el = $('setBody');
     if (q('capIn')) q('capIn').onchange = async () => { const v = +String(q('capIn').value).replace(',', '.'); if (!(v >= 1)) { setSig = ''; renderSettings(); return; } const up = v > +real.lifetime_cap;
       if (up && !(await ask({ title: 'Raise the lifetime cap?', text: `Allow up to ${money(v)} of total real losses.`, ok: 'Raise' }))) { setSig = ''; renderSettings(); return; }
       R.realCap(v, up).then(() => toast({ level: 'info', title: 'Lifetime cap set', text: money(v) }), errToast); };
-    q('forgetKey').onclick = async () => { if (await ask({ title: 'Unpair this device?', text: 'The key is removed from this device.', ok: 'Unpair', danger: true })) { R.forget(); go('home'); } };
+    q('forgetKey').onclick = async () => { if (await ask({ title: 'Sign out?', text: 'You will need your password to sign in again on this device.', ok: 'Sign out', danger: true })) { R.forget(); go('home'); } };
+    if (q('openUsers')) q('openUsers').onclick = () => go('users');
+    if (q('tokSave')) q('tokSave').onclick = async () => {
+      const err = q('tokErr'); err.textContent = '';
+      const demo = (q('tokDemo').value || '').trim(), real = (q('tokReal').value || '').trim(), app = (q('tokApp').value || '').trim();
+      if (!demo && !real) { err.textContent = 'Paste a Deriv token first'; return; }
+      try { await R.saveTokens({ demo_token: demo || undefined, real_token: real || undefined, app_id: app || undefined }); q('tokDemo').value = ''; q('tokReal').value = ''; toast({ level: 'win', title: 'Tokens saved' }); setSig = ''; renderSettings(); }
+      catch (e) { err.textContent = e.message; }
+    };
   }
   for (const b of BOTS) { const x = botOf(st, b.id), s = el.querySelector(`[data-sub="${b.id}"]`); if (x && s) { const t = `${x.on ? 'Running' : 'Stopped'} · ${x.contract} · stake ${money(x.params.stake)}`; if (s.textContent !== t) s.textContent = t; } }
   const t1 = `${esc(st.account.prefix || '')} · balance ${money(st.account.balance)}`; if ($('setAcct').textContent !== t1) $('setAcct').textContent = t1;
@@ -561,19 +580,70 @@ async function clearHistory() { const st = R.st; if (!st) return; if (isReal(st)
   if (!(await ask({ title: 'Clear history?', text: 'Demo trades and stats are wiped. This can’t be undone.', ok: 'Clear', danger: true }))) return;
   try { await R.clearHistory(); catchUpEvents(R.st); toast({ level: 'info', title: 'History cleared' }); } catch (e) { errToast(e); } }
 
-/* ---------- pairing ---------- */
-$('pairBtn').onclick = async () => { const k = ($('pairInput').value || '').trim(); $('pairErr').textContent = '';
-  try { if (/^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/.test(k)) await R.pair(k); else if (!k) throw new Error('Enter your password'); else { try { await R.login(k); } catch (e) { if (e.status === 401 && k.length >= 32) { R.setKey(k); await R.api('GET', '/api/status'); } else throw e; } }
-    R.authBad = false; $('pairInput').value = ''; toast({ level: 'win', title: 'Connected' }); await R.refresh(true); R.kick(); }
+/* ---------- sign-in + invite ---------- */
+async function afterAuth() { R.authBad = false; $('pairInput').value = ''; const n = $('loginName'); if (n) n.value = ''; toast({ level: 'win', title: 'Signed in' }); await R.refresh(true); R.kick(); }
+$('pairBtn').onclick = async () => { const k = ($('pairInput').value || '').trim(), name = (($('loginName') && $('loginName').value) || '').trim(); $('pairErr').textContent = '';
+  try { if (/^[A-Za-z0-9]{4}-?[A-Za-z0-9]{4}$/.test(k) && !name) await R.pair(k); else if (!k) throw new Error('Enter your password'); else { try { await R.login(k, name); } catch (e) { if (e.status === 401 && k.length >= 32 && !name) { R.setKey(k); await R.api('GET', '/api/status'); } else throw e; } }
+    await afterAuth(); }
   catch (e) { if (e.status === 401) R.forget(); $('pairErr').textContent = e.message; } };
 $('pairInput').addEventListener('keydown', e => { if (e.key === 'Enter') $('pairBtn').click(); });
+if ($('loginName')) $('loginName').addEventListener('keydown', e => { if (e.key === 'Enter') $('pairInput').focus(); });
+
+(function inviteFlow() {
+  const box = $('inviteBox'), login = $('loginBox'); if (!box) return;
+  const params = new URLSearchParams(location.search);
+  const code = params.get('invite') || '';
+  if (!code) return;
+  const showErr = m => { $('inviteErr').textContent = m || ''; };
+  login.hidden = true; box.hidden = false;
+  R.invitePeek(code).then(d => { $('inviteBlurb').textContent = 'Hi, ' + d.name + '. Set a password only you will know.'; }).catch(() => { showErr('This invite is wrong or has expired.'); });
+  $('inviteBtn').onclick = async () => {
+    showErr(''); const a = ($('invitePw').value || ''), b = ($('invitePw2').value || '');
+    if (a.length < 8) return showErr('Use a password of at least 8 characters');
+    if (a !== b) return showErr('The two passwords do not match');
+    try { await R.signup(code, a); $('invitePw').value = ''; $('invitePw2').value = ''; history.replaceState({}, '', location.pathname + location.hash); login.hidden = false; box.hidden = true; await afterAuth(); }
+    catch (e) { showErr(e.message); }
+  };
+  $('invitePw2').addEventListener('keydown', e => { if (e.key === 'Enter') $('inviteBtn').click(); });
+})();
+
+function renderUsers() {
+  const el = $('usersList'); if (!el) return;
+  const st = R.st;
+  if (!st || !st.me || st.me.role !== 'admin') { el.innerHTML = '<div class="row"><div class="l"><b>Admin only</b></div></div>'; return; }
+  if (!R.users) { R.adminUsers().then(d => { R.users = d.users; renderUsers(); }).catch(errToast); el.innerHTML = '<p class="muted" style="padding:12px">Loading…</p>'; return; }
+  const fmtSeen = t => { if (!t) return 'Never'; const s = Math.max(0, Math.floor(Date.now() / 1000) - t); if (s < 60) return 'Just now'; if (s < 3600) return Math.floor(s / 60) + ' min ago'; if (s < 86400) return Math.floor(s / 3600) + 'h ago'; return fmtT(t, true); };
+  el.innerHTML = R.users.map(u => `<div class="row"><div class="l"><b>${esc(u.name)}${u.role === 'admin' ? ' · Admin' : ''}${u.disabled ? ' · Disabled' : ''}</b><small>${u.connected ? 'Connected' : 'Not connected'} · Last seen ${fmtSeen(u.last_seen)}</small></div>${u.role === 'admin' ? '' : `<button type="button" class="btn ${u.disabled ? 'ghost' : 'danger'} sm" data-uid="${esc(u.id)}" data-off="${u.disabled ? '0' : '1'}">${u.disabled ? 'Enable' : 'Disable'}</button>`}</div>`).join('') || '<p class="muted" style="padding:12px">No users yet</p>';
+  el.querySelectorAll('[data-uid]').forEach(b => b.onclick = async () => {
+    try { const d = await R.adminDisable(b.dataset.uid, b.dataset.off === '1'); R.users = d.users; renderUsers(); toast({ level: 'info', title: b.dataset.off === '1' ? 'Account disabled' : 'Account enabled' }); }
+    catch (e) { errToast(e); }
+  });
+}
+if ($('usersBack')) $('usersBack').onclick = () => go('settings');
+if ($('inviteMake')) $('inviteMake').onclick = async () => {
+  $('usersErr').textContent = ''; $('inviteOut').hidden = true;
+  const name = ($('inviteName').value || '').trim();
+  if (!name) { $('usersErr').textContent = 'Enter their name'; return; }
+  try {
+    const d = await R.adminInvite(name);
+    $('inviteOutName').textContent = 'Invite for ' + d.name + ' · they set their own password';
+    $('inviteOutUrl').value = d.url; $('inviteOut').hidden = false;
+    $('inviteName').value = '';
+    R.users = null; renderUsers();
+  } catch (e) { $('usersErr').textContent = e.message; }
+};
+if ($('inviteCopy')) $('inviteCopy').onclick = async () => {
+  const url = $('inviteOutUrl').value;
+  try { await navigator.clipboard.writeText(url); toast({ level: 'win', title: 'Link copied' }); } catch (e) { $('inviteOutUrl').select(); toast({ level: 'info', title: 'Copy the link from the box' }); }
+};
+
 
 /* ---------- render loop ---------- */
-function render() { renderHeader();
-  if (view === 'mt5') { if (window.ATSMT5) window.ATSMT5.render(); } else if (view === 'home') renderHome(); else if (view === 'bot') renderBot(); else if (view === 'ab') renderAB(); else if (view === 'stats') renderStats(); else if (view === 'history') renderHistory(); else renderSettings(); }
+function render() { if (view === 'users') renderUsers(); renderHeader();
+  if (view === 'mt5') { if (window.ATSMT5) window.ATSMT5.render(); } else if (view === 'home') renderHome(); else if (view === 'bot') renderBot(); else if (view === 'ab') renderAB(); else if (view === 'stats') renderStats(); else if (view === 'history') renderHistory(); else if (view === 'settings') renderSettings(); }
 R.on(() => { pumpEvents(R.st); render(); });
 window.ATSApp = { go, toast, render, setTheme, openAccount, ask, info, money, esc, I, Form: FormCtl, renderHome: () => { if (view === 'home') renderHome(); } };
-function goTo(g) { const [v, a] = String(g || 'home').split(':'); if (['home', 'bot', 'ab', 'mt5', 'stats', 'history', 'settings'].includes(v)) go(v, a); else go('home'); }
+function goTo(g) { const [v, a] = String(g || 'home').split(':'); if (['home', 'bot', 'ab', 'mt5', 'stats', 'history', 'settings', 'users'].includes(v)) go(v, a); else go('home'); }
 { let g0 = null; try { g0 = new URLSearchParams(location.search).get('go'); if (g0) history.replaceState(null, '', location.pathname); } catch (e) { } goTo(g0 || 'home'); }
 if ('serviceWorker' in navigator) navigator.serviceWorker.addEventListener('message', e => { if (e.data && e.data.type === 'go') goTo(e.data.go); });
 R.kick();

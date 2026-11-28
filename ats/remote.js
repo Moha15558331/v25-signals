@@ -29,11 +29,25 @@ const R = {
     catch (e) { throw new Error('Server unreachable — check your internet'); }
     if (!r.ok || !d || !d.key) throw new Error((d && d.error) || 'Pairing failed'); this.setKey(d.key); return true;
   },
-  async login(password) {
-    let r, d; try { r = await fetch(this.url() + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }), cache: 'no-store' }); d = await r.json().catch(() => null); }
+  async login(password, name) {
+    let r, d; try { r = await fetch(this.url() + '/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password, name: name || '' }), cache: 'no-store' }); d = await r.json().catch(() => null); }
     catch (e) { throw new Error('Server unreachable — check your internet'); }
-    if (!r.ok || !d || !d.key) throw Object.assign(new Error((d && d.error) || 'Sign-in failed'), { status: r.status }); this.setKey(d.key); return true;
+    if (!r.ok || !d || !d.key) throw Object.assign(new Error((d && d.error) || 'Sign-in failed'), { status: r.status }); this.setKey(d.key); this.me = d.me || null; return true;
   },
+  async signup(code, password) {
+    let r, d; try { r = await fetch(this.url() + '/api/signup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ code, password }), cache: 'no-store' }); d = await r.json().catch(() => null); }
+    catch (e) { throw new Error('Server unreachable — check your internet'); }
+    if (!r.ok || !d || !d.key) throw Object.assign(new Error((d && d.error) || 'Could not create the account'), { status: r.status }); this.setKey(d.key); this.me = d.me || null; return true;
+  },
+  async invitePeek(code) {
+    let r, d; try { r = await fetch(this.url() + '/api/invite?code=' + encodeURIComponent(code), { cache: 'no-store' }); d = await r.json().catch(() => null); }
+    catch (e) { throw new Error('Server unreachable — check your internet'); }
+    if (!r.ok || !d || !d.ok) throw new Error((d && d.error) || 'Invite is wrong or has expired'); return d;
+  },
+  adminUsers() { return this.api('GET', '/api/admin/users'); },
+  adminInvite(name) { return this.act('POST', '/api/admin/invites', { name }); },
+  adminDisable(id, off) { return this.act('POST', '/api/admin/users/' + (off ? 'disable' : 'enable'), { id }); },
+  saveTokens(body) { return this.act('POST', '/api/account/tokens', body); },
   async refresh(full) {
     if (!this.hasKey()) { this.changed(); return; }
     try { const s = await this.api('GET', '/api/status'); this.st = s; this.err = null; this.lastOk = Date.now();

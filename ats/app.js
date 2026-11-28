@@ -3,7 +3,7 @@
  * Forms are built once and only patched while not focused or edited, so the status poll never replaces an input (iPhone keyboard stays open). */
 (() => {
 'use strict';
-const APP_VER = '4.24.0';
+const APP_VER = '4.24.1';
 (function watchUpdates() {
   if (!('serviceWorker' in navigator)) return;
   const show = () => { const bar = document.getElementById('updBar'); if (!bar || !bar.hidden) return; bar.hidden = false; bar.onclick = () => location.reload(); };
@@ -217,7 +217,15 @@ function renderHeader() { const st = R.st; const anyOn = st && allBots(st).some(
 /* ---------- home ---------- */
 const NAME_KEY = 'ats.name';
 const isAdmin = () => !!(R.st && R.st.me && R.st.me.role === 'admin');
+const isFriend = () => !!(R.st && R.st.me && R.st.me.role && R.st.me.role !== 'admin');
 const hasMt5Ui = () => !!(R.st && R.st.me);
+function friendify(s) {
+  const t = String(s || '');
+  if (!t) return '';
+  if (/no demo token|deriv-demo\.env|\/opt\/ats\/.secrets\/deriv-demo/i.test(t)) return 'Add your Deriv demo token.';
+  if (/no real token|DERIV_REAL|deriv-real/i.test(t)) return 'Add your Deriv real token to use Real.';
+  return t.replace(/\/opt\/ats\/\S+/gi, '').replace(/\.secrets\/\S+/gi, '').replace(/DERIV_[A-Z0-9_]+/g, '').replace(/\s{2,}/g, ' ').trim();
+}
 function accountName() { const me = R.st && R.st.me; if (me && me.name) return me.name; try { const n = localStorage.getItem(NAME_KEY); if (n) return n; } catch (e) { } return 'Trader'; }
 function editName() { const cur = accountName();
   sheet(`<h2>Your name</h2><p>Shown on the welcome screen. Stored only on this device.</p><input class="field" id="nmIn" maxlength="40" autocomplete="off" value="${esc(cur === 'Trader' ? '' : cur)}" placeholder="Name"><div class="btns"><button type="button" class="btn primary block" id="nmOk">Save</button><button type="button" class="btn ghost block" id="nmNo">Cancel</button></div>`, s => {
@@ -537,7 +545,7 @@ function renderSettings() { const st = R.st, el = $('setBody');
     <section class="card"><div class="card-h"><h3>Real money</h3></div>
       <div class="row"><div class="l"><b>Lifetime loss cap</b><small id="capTxt"></small></div><label class="switch"><input type="checkbox" id="capOn"${capOn(real) ? ' checked' : ''}><span></span></label></div>
       ${capOn(real) ? `<div class="row"><div class="l"><b>Cap amount</b></div><span class="inp"><i>$</i><input type="text" inputmode="decimal" id="capIn" value="${esc(real.lifetime_cap)}"></span></div>` : ''}</section>
-    ${rl ? '' : `<section class="card"><div class="card-h"><h3>Demo tools</h3></div>
+    ${rl || (isFriend() && !(st.me.flags && st.me.flags.demo)) ? '' : `<section class="card"><div class="card-h"><h3>Demo tools</h3></div>
       <div class="row"><div class="l"><b>Reset today</b></div><button type="button" class="link" id="resetTodaySet">Reset</button></div>
       <div class="row"><div class="l"><b>Reset demo balance</b></div><button type="button" class="link" id="resetDemo">Reset</button></div>
       <div class="row"><div class="l"><b>Clear history</b>${anyOn ? '<small>Stop all bots first</small>' : ''}</div><button type="button" class="link dn" id="clearHist"${anyOn ? ' disabled' : ''}>Clear</button></div></section>`}
@@ -545,7 +553,8 @@ function renderSettings() { const st = R.st, el = $('setBody');
     <section class="card"><div class="card-h"><h3>Appearance</h3></div><div class="seg" id="themeSeg">${['auto', 'light', 'dark'].map(t => `<button type="button" data-t="${t}" class="${pref === t ? 'on' : ''}">${t === 'auto' ? 'Automatic' : t[0].toUpperCase() + t.slice(1)}</button>`).join('')}</div></section>
     ${st.me && st.me.role === 'admin' ? `<section class="card"><div class="card-h"><h3>Users</h3></div><button type="button" class="row link-row" id="openUsers"><div class="l"><b>Invite friends</b><small>Invite-only accounts, each with their own bots</small></div>${I.chev}</button></section>` : ''}
     <section class="card"><div class="card-h"><h3>Deriv connection</h3></div>
-      ${st.me && st.me.role === 'admin' ? `<div class="row"><div class="l"><b>${st.me.flags && st.me.flags.demo ? 'Demo connected' : 'Demo'}</b><small>${st.me.flags && st.me.flags.real ? 'Real token is on the server' : 'Tokens stay on the server'}</small></div></div>` : `<div class="row"><div class="l"><b>Demo token</b><small>${st.me && st.me.flags && st.me.flags.demo ? 'Connected' : 'Paste your Deriv demo API token'}</small></div></div>
+      ${st.me && st.me.role === 'admin' ? `<div class="row"><div class="l"><b>${st.me.flags && st.me.flags.demo ? 'Demo connected' : 'Demo'}</b><small>${st.me.flags && st.me.flags.real ? 'Real token is on the server' : 'Tokens stay on the server'}</small></div></div>` : `<p class="muted">Add your Deriv token. It is saved encrypted and never shown to anyone else.</p>
+      <div class="row"><div class="l"><b>Demo token</b><small>${st.me && st.me.flags && st.me.flags.demo ? 'Connected' : 'Add your Deriv demo token'}</small></div></div>
       <input type="password" id="tokDemo" class="field" placeholder="${st.me && st.me.flags && st.me.flags.demo ? 'Token saved · paste to replace' : 'Demo API token'}" autocomplete="off" spellcheck="false">
       <input type="text" id="tokApp" class="field" placeholder="Deriv app ID (optional)" inputmode="numeric" autocomplete="off">
       <div class="row"><div class="l"><b>Real token</b><small>${st.me && st.me.flags && st.me.flags.real ? 'Connected · you flip Real yourself' : 'Optional. Real stays off until you flip it'}</small></div></div>
@@ -584,7 +593,7 @@ function renderSettings() { const st = R.st, el = $('setBody');
       const demo = (q('tokDemo').value || '').trim(), real = (q('tokReal').value || '').trim(), app = (q('tokApp').value || '').trim();
       if (!demo && !real) { err.textContent = 'Paste a Deriv token first'; return; }
       try { await R.saveTokens({ demo_token: demo || undefined, real_token: real || undefined, app_id: app || undefined }); q('tokDemo').value = ''; q('tokReal').value = ''; toast({ level: 'win', title: 'Tokens saved' }); setSig = ''; renderSettings(); }
-      catch (e) { err.textContent = e.message; }
+      catch (e) { err.textContent = friendify(e.message); }
     };
   }
   for (const b of BOTS) { const x = botOf(st, b.id), s = el.querySelector(`[data-sub="${b.id}"]`); if (x && s) { const t = `${x.on ? 'Running' : 'Stopped'} · ${x.contract} · stake ${money(x.params.stake)}`; if (s.textContent !== t) s.textContent = t; } }
@@ -592,17 +601,38 @@ function renderSettings() { const st = R.st, el = $('setBody');
   $('capTxt').textContent = capOn(real) ? `${money(real.lifetime_lost)} lost · ${money(real.room_left)} left` : 'Off'; }
 
 /* ---------- account sheet ---------- */
-function openAccount() { const st = R.st; if (!st) return; const real = st.real, a = st.account, rl = isReal(st); const err = a.error && !a.verified ? a.error : '';
+function openAccount() { const st = R.st; if (!st) return; const real = st.real, a = st.account, rl = isReal(st);
+  const friend = isFriend(), flags = (st.me && st.me.flags) || {};
+  const needDemo = friend && !flags.demo;
+  const rawErr = a.error && !a.verified ? a.error : '';
+  const err = friend ? (needDemo ? 'Add your Deriv demo token to see your balance.' : friendify(rawErr)) : rawErr;
+  const realNotice = friend ? '' : (!real.available ? real.reason : '');
+  const tokenForm = friend ? `<p class="muted">Add your Deriv token. Saved encrypted and never shown again.</p>
+    <input type="password" id="shTokDemo" class="field" placeholder="${flags.demo ? 'Demo token saved · paste to replace' : 'Demo API token'}" autocomplete="off" spellcheck="false">
+    <input type="password" id="shTokReal" class="field" placeholder="${flags.real ? 'Real token saved · paste to replace' : 'Real API token (optional)'}" autocomplete="off" spellcheck="false">
+    <button type="button" class="btn primary block" id="shTokSave">Save tokens</button>
+    <p class="err-txt" id="shTokErr"></p>` : '';
+  const demoTools = !rl && !needDemo ? `<button type="button" class="btn block" id="shDay">Reset today</button><button type="button" class="btn ghost block" id="shReset">Reset demo balance</button>` : '';
   sheet(`<span class="eyebrow">${rl ? 'Real account' : 'Demo account'}</span><div class="bal${rl ? ' gold' : ''}">${money(a.balance)}</div><p class="muted">${esc(a.prefix || '')}${a.verified ? ' · verified' : ''}</p>
     <div class="seg acct"><button type="button" data-m="demo" class="${rl ? '' : 'on'}">Demo</button><button type="button" data-m="real" class="${rl ? 'on real' : ''}"${!real.available && !rl ? ' disabled' : ''}>Real</button></div>
-    ${!real.available ? `<div class="notice bad">${I.alert}<span>${esc(real.reason)}</span></div>` : ''}${err ? `<div class="notice bad">${I.alert}<span>${esc(err)}</span></div>` : ''}
-    <div class="btns">${rl ? '' : `<button type="button" class="btn block" id="shDay">Reset today</button><button type="button" class="btn ghost block" id="shReset">Reset demo balance</button>`}<button type="button" class="btn ghost block" id="shClose">Done</button></div>`, s => {
-    s.querySelector('#shClose').onclick = closeSheet;
-    const rb = s.querySelector('#shReset'); if (rb) rb.onclick = () => { closeSheet(); resetDemo(); }; const db = s.querySelector('#shDay'); if (db) db.onclick = () => { closeSheet(); resetToday(); };
-    s.querySelectorAll('.seg.acct button').forEach(b => b.onclick = () => { if (b.disabled) return; const m = b.dataset.m; if ((m === 'real') === rl) return; if (m === 'real') enableReal(); else { closeSheet(); disableReal(); } }); }); }
+    ${realNotice ? `<div class="notice bad">${I.alert}<span>${esc(realNotice)}</span></div>` : ''}${err ? `<div class="notice${friend && needDemo ? '' : ' bad'}">${friend && needDemo ? '' : I.alert}<span>${esc(err)}</span></div>` : ''}
+    ${tokenForm}
+    <div class="btns">${demoTools}<button type="button" class="btn ghost block" id="shClose">Done</button></div>`, box => {
+    box.querySelector('#shClose').onclick = closeSheet;
+    const rb = box.querySelector('#shReset'); if (rb) rb.onclick = () => { closeSheet(); resetDemo(); }; const db = box.querySelector('#shDay'); if (db) db.onclick = () => { closeSheet(); resetToday(); };
+    box.querySelectorAll('.seg.acct button').forEach(b => b.onclick = () => { if (b.disabled) return; const m = b.dataset.m; if ((m === 'real') === rl) return; if (m === 'real') enableReal(); else { closeSheet(); disableReal(); } });
+    const ts = box.querySelector('#shTokSave');
+    if (ts) ts.onclick = async () => {
+      const errEl = box.querySelector('#shTokErr'); errEl.textContent = '';
+      const demo = (box.querySelector('#shTokDemo').value || '').trim(), realT = (box.querySelector('#shTokReal').value || '').trim();
+      if (!demo && !realT) { errEl.textContent = 'Paste a Deriv token first'; return; }
+      try { await R.saveTokens({ demo_token: demo || undefined, real_token: realT || undefined }); toast({ level: 'win', title: 'Tokens saved' }); closeSheet(); }
+      catch (e) { errEl.textContent = friendify(e.message); }
+    };
+  }); }
 $('acctPill').onclick = () => { if (!R.st) { if (!R.hasKey()) go('home'); return; } openAccount(); };
 async function enableReal() { const st = R.st, real = st.real;
-  if (!real.available) { info('Real mode isn’t available', real.reason); return; }
+  if (!real.available) { info('Real mode isn’t available', isFriend() ? (friendify(real.reason) || 'Add your Deriv real token to use Real.') : real.reason); return; }
   if (allBots(st).some(x => x.on)) { info('Stop all bots first', 'Switch modes while nothing is running.'); return; }
   if (!(await ask({ title: 'Switch to Real money?', text: 'Rise and Fall will trade your real balance.', real: true, ok: 'Switch' }))) return;
   try { await R.realOn(); catchUpEvents(R.st); toast({ level: 'warn', title: 'Real money mode on' }); } catch (e) { errToast(e); } }

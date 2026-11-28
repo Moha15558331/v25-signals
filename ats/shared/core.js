@@ -159,7 +159,7 @@
     const hb = hourBahrain(epoch); let hv = 0; // historical up-fraction of 1h candles that open at this Bahrain hour
     const same = h1.slice(0, -1).filter(x => hourBahrain(x.epoch) === hb); const upF = same.length ? same.filter(x => x.close > x.open).length / same.length : 0.5;
     if (same.length >= 30) hv = clamp((upF - 0.5) * 4, -1, 1); votes.hour = r(hv, 3);
-    reasons.push({ w: Math.abs(hv) * WEIGHTS.hour, t: `Hour ${pad(hb)}:00 Bahrain: ${r(upF * 100, 1)}% of the last ${same.length} candles for this hour closed up` });
+    reasons.push({ w: Math.abs(hv) * WEIGHTS.hour, t: `Hour ${pad(hb)}:00: ${r(upF * 100, 1)}% of the last ${same.length} candles for this hour closed up` });
     // regime
     const reg = regime(C['1m'] || []);
     // combine

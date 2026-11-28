@@ -8,7 +8,7 @@ const A = () => window.ATSApp, R = () => window.ATSRemote;
 const esc = s => String(s == null ? '' : s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const money = (x, sign) => x == null || isNaN(x) ? '—' : (sign && x > 0 ? '+' : x < 0 ? '−' : '') + '$' + Math.abs(+x).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const cls = x => x > 0 ? 'up' : x < 0 ? 'dn' : '';
-const noZone = s => String(s || '').replace(/midnight Bahrain/gi, '00:00').replace(/\bBahrain\b/gi, '').replace(/\s{2,}/g, ' ').trim();
+const noZone = s => String(s || '').replace(/midnight Bahrain/gi, '00:00').replace(/\bat midnight\b/gi, 'at 00:00').replace(/\buntil midnight\b/gi, 'until 00:00').replace(/\bBahrain\b/gi, '').replace(/\s+-\s+resets at/gi, ' · resets at').replace(/\s{2,}/g, ' ').replace(/\s+·/g, ' ·').trim();
 const tm = ep => new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Bahrain', hour: '2-digit', minute: '2-digit', hour12: false }).format(new Date(ep * 1000));
 const dur = s => s < 60 ? Math.max(1, Math.round(s)) + 's' : s < 3600 ? Math.round(s / 60) + 'm' : Math.floor(s / 3600) + 'h ' + Math.round(s % 3600 / 60) + 'm';
 const UP = '<svg viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></svg>', DN = '<svg viewBox="0 0 24 24"><path d="M12 5v14M6 13l6 6 6-6"/></svg>';

@@ -294,7 +294,7 @@ function renderDashRemote() {
     $('atsStopAll').disabled = true; $('atsLimits').textContent = 'ATS limits: loading…'; return; }
   const se = st.session, b = st.bot, live = b.live && b.open ? +b.live.profit || 0 : 0;
   const el = $('atsPnl'); el.textContent = money(se.pnl, true); el.className = 'ats-big ' + (se.pnl > 0 ? 'up' : se.pnl < 0 ? 'dn' : '');
-  $('atsSince').textContent = `since ${bhStamp(se.start)} Bahrain` + (live ? ` · open ${money(live, true)}` : '');
+  $('atsSince').textContent = `since ${bhStamp(se.start)}` + (live ? ` · open ${money(live, true)}` : '');
   const bal = st.account && st.account.balance; $('atsBal').textContent = bal == null ? '—' : '$' + Number(bal).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   $('atsTrades').textContent = se.trades; $('atsWin').textContent = pct(se.winrate); $('atsOpen').textContent = se.open;
   const on = b.running || b.open, la = st.last_analysis;
@@ -325,7 +325,7 @@ function renderModel() {
   const vcls = c => c === 'beating' ? 'ok' : c === 'losing' ? 'bad' : 'warn';
   const dayTxt = d ? (d.state === 'locked' ? `<span class="pill ok">Locked +$${(+d.lock).toFixed(2)}</span>` : d.state === 'stopped' ? `<span class="pill bad">Stopped −$${(+d.stop).toFixed(2)}</span>` : d.state === 'trading' ? '<span class="pill">Trading</span>' : '') : '';
   const callTxt = lc ? `${lc.dir === 'up' ? 'Rise' : 'Fall'} ${lc.conf}% · ${bhTime(lc.T)}${lc.traded ? ' · traded' : lc.signal ? ' · ' + esc(lc.skip || 'signal') : ' · below bar'}${lc.result ? ' · ' + (lc.result === 'win' ? 'won ' : 'lost ') + money(lc.profit, true) : ''}` : 'none yet';
-  el.innerHTML = `<div class="row-between"><div><div class="bv-sec" style="margin:0">Model test · 10m neural net</div><small class="muted">Demo forward test since ${m.started_at ? bhStamp(m.started_at) : '—'} Bahrain · bar ${pct1(m.threshold_prob.rise_above)} sure</small></div>
+  el.innerHTML = `<div class="row-between"><div><div class="bv-sec" style="margin:0">Model test · 10m neural net</div><small class="muted">Demo forward test since ${m.started_at ? bhStamp(m.started_at) : '—'} · bar ${pct1(m.threshold_prob.rise_above)} sure</small></div>
       <span class="model-live ${on ? 'on' : ''}"><i></i>${on ? 'LIVE' : 'OFF'}</span></div>
     <div class="stats3 mt"><div><span class="eyebrow">Trades</span><b>${t.n}${t.open ? ` <small class="muted">+${t.open}</small>` : ''}</b></div><div><span class="eyebrow">Win rate</span><b>${pct1(t.winrate)}</b></div><div><span class="eyebrow">P&amp;L</span><b class="${t.pnl > 0 ? 'up' : t.pnl < 0 ? 'dn' : ''}">${money(t.pnl, true)}</b></div></div>
     <div class="model-sec"><div class="row-between"><span class="eyebrow">Real demo trades · 95% range</span><span class="pill ${vcls(t.verdict.code)}">${t.n ? pct1(t.ci95[0]) + '–' + pct1(t.ci95[1]) : 'no trades yet'}</span></div>${ciBar(t)}<small class="muted">${esc(t.verdict.text)}</small></div>
@@ -344,7 +344,7 @@ function renderDash() {
   const st = E.statsOf(sessionRows(mode));
   const live = BOT.mode === mode && BOT.live ? +BOT.live.profit || 0 : 0;
   const el = $('atsPnl'); el.textContent = money(st.pnl, true); el.className = 'ats-big ' + (st.pnl > 0 ? 'up' : st.pnl < 0 ? 'dn' : '');
-  $('atsSince').textContent = `since ${bhTime(SESSION.start)} Bahrain` + (live ? ` · open ${money(live, true)}` : '');
+  $('atsSince').textContent = `since ${bhTime(SESSION.start)}` + (live ? ` · open ${money(live, true)}` : '');
   $('atsBal').textContent = s.balance == null ? '—' : '$' + Number(s.balance).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   $('atsTrades').textContent = st.trades; $('atsWin').textContent = pct(st.winrate); $('atsOpen').textContent = st.open;
   const on = anyRunning(); const p = BOT.run ? BOT.run.p : PARAMS[KEY];
@@ -412,7 +412,7 @@ function renderBotView() {
       ${RON() ? `<div class="card"><div class="bv-sec">Strategy</div>${F('What decides the trades', sel('strategy', p.strategy || 'classic', [['classic', 'Classic analysis (settings below)'], ['model10m', 'Model test · 10m neural net (demo)']]))}</div>` : ''}
       ${isModelP ? `<div class="card"><div class="bv-sec">Model test <span class="req">demo only</span></div>
         <div class="grid2">${F('Flat stake $', numIn('model_stake', p.model_stake, 0.01, E.MIN_STAKE), 'No martingale')}${F('Daily profit lock $', numIn('day_tp', p.day_tp, 0.5, 0.01), 'Done for the day once up this much')}${F('Daily stop $', numIn('day_sl', p.day_sl, 0.5, 0.01), 'Done for the day once down this much')}</div>
-        <small class="hint">Every 10 minutes the server scores V25 with the neural net from our edge search. It buys a 10-minute Rise/Fall only when the call is in its top 10% (above ${modelBar()}% sure), then waits for the next one. Each Bahrain day restarts at $0. Research result: 54.4% on 579 test trades, but that is not proven: break-even is 51.3%. This is a live test.</small></div>` : ''}
+        <small class="hint">Every 10 minutes the server scores V25 with the neural net from our edge search. It buys a 10-minute Rise/Fall only when the call is in its top 10% (above ${modelBar()}% sure), then waits for the next one. Each day restarts at $0 at 00:00. Research result: 54.4% on 579 test trades, but that is not proven: break-even is 51.3%. This is a live test.</small></div>` : ''}
       <div class="card${isModelP ? ' hide' : ''}"><div class="bv-sec">Trade</div>
         ${F('Direction', sel('direction', p.direction, DIR_OPTS), p.direction === 'analysis' ? 'Uses the V25 analysis on the cycle’s candles. No proven edge yet.' : '')}
         <div class="grid2">${F('Stake $', numIn('stake', p.stake, 0.01, E.MIN_STAKE), 'Min $0.35')}${F('Cycle', sel('cycle', p.cycle, E.CYCLE_OPTS))}</div>
